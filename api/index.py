@@ -26,7 +26,7 @@ if GEMINI_KEY:
 
 generation_config = {"temperature": 0.0}
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",  # Update to standard model name
+    model_name="gemini-3.5-flash",  # Update to standard model name
     generation_config=generation_config,
     system_instruction="""
 <ROLE>

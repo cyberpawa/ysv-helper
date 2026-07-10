@@ -170,7 +170,7 @@ export default function App() {
 
     const checkState = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/state`, {
+        const res = await fetch(`${BACKEND_URL}/state`, {
           method: "GET",
           headers: getAuthHeaders()
         });
@@ -208,7 +208,7 @@ export default function App() {
             setGlobalLoading(false);
             alert("❌ Помилка обробки: " + s.error_message);
             // Clear status
-            await fetch(`${BACKEND_URL}/api/state/reset`, {
+            await fetch(`${BACKEND_URL}/state/reset`, {
               method: "POST",
               headers: getAuthHeaders()
             });
@@ -873,7 +873,7 @@ export default function App() {
     setScreen("archive");
   
     try {
-      const res = await fetch(`${BACKEND_URL}/api/archive`, {
+      const res = await fetch(`${BACKEND_URL}/archive`, {
         method: "GET",
         headers: getAuthHeaders()
       });
@@ -899,7 +899,7 @@ export default function App() {
     setGlobalLoading(true);
   
     try {
-      const res = await fetch(`${BACKEND_URL}/api/archive/detail/${tabelId}`, {
+      const res = await fetch(`${BACKEND_URL}/archive/detail/${tabelId}`, {
         method: "GET",
         headers: getAuthHeaders()
       });
@@ -940,7 +940,7 @@ export default function App() {
     setGlobalLoading(true);
   
     try {
-      const res = await fetch(`${BACKEND_URL}/api/archive/update/${currentArchiveId}`, {
+      const res = await fetch(`${BACKEND_URL}/archive/update/${currentArchiveId}`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ data: finalParsedData })
@@ -976,7 +976,7 @@ export default function App() {
     setGlobalLoading(true);
   
     try {
-      const res = await fetch(`${BACKEND_URL}/api/send-email`, {
+      const res = await fetch(`${BACKEND_URL}/send-email`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ tabel_id: tabelId })
