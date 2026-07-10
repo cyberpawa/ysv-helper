@@ -291,7 +291,7 @@ async def reset_user_state(current_user: dict = Depends(get_current_tg_user)):
         return {"status": "error", "message": str(e)}
 
 # Timesheet Scanning & Processing Endpoint
-@app.post("/upload")
+@app.post("/api/upload")
 async def receive_image(request: Request, current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
     data = await request.json()
@@ -461,7 +461,7 @@ class ExcelRequest(BaseModel):
 class EmailRequest(BaseModel):
     tabel_id: int
 
-@app.post("/generate-excel")
+@app.post("/api/generate-excel")
 async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_current_tg_user)):
     try:
         parsed_data = req.data
