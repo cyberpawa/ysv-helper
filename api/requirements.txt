@@ -1,0 +1,8 @@
+fastapi
+pydantic
+uvicorn
+supabase
+openpyxl
+google-generativeai
+aiogram
+jinja2

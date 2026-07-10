@@ -1,0 +1,6 @@
+{
+  "name": "Табель Помічник YSV",
+  "description": "Особистий асистент для швидкого та надійного оцифрування табелів обліку робочого часу Form P-5 з використанням ШІ.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
