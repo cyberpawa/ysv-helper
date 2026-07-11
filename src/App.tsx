@@ -240,13 +240,14 @@ export default function App() {
   // Handle Dynamic Telegram WebApp BackButton State
   useEffect(() => {
     if (tg && tg.BackButton) {
-      if (screen === "menu") {
+      // Прячем кнопку "Назад" в главном меню ИЛИ когда идет загрузка (globalLoading)
+      if (screen === "menu" || globalLoading) {
         tg.BackButton.hide();
       } else {
         tg.BackButton.show();
       }
     }
-  }, [screen, tg]);
+  }, [screen, globalLoading, tg]);
 
   useEffect(() => {
     if (tg && tg.BackButton) {

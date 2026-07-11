@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import asyncio
 import base64
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl
 from fastapi import FastAPI, Request, Header, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -251,11 +252,19 @@ async def telegram_webhook(request: Request):
         return {"ok": False, "error": str(e)}
 
 @app.get("/api/setup-webhook")
-async def setup_webhook(request: Request):
+async def setup_webhook(request: Request, secret: str = None):
+    # Базовая защита: эндпоинт сработает только если передать секретный пароль
+    if secret != "super_admin_123":
+        return {"status": "error", "message": "Доступ заборонено"}
+
     if not bot:
         return {"status": "error", "message": "BOT_TOKEN not configured"}
-    app_url = os.getenv("APP_URL") or str(request.base_url).rstrip("/")
+    
+    # Жестко отрезаем слеш в конце, откуда бы он ни пришел
+    raw_app_url = os.getenv("APP_URL") or str(request.base_url)
+    app_url = raw_app_url.rstrip("/")
     webhook_url = f"{app_url}/api/telegram"
+    
     try:
         await bot.set_webhook(webhook_url)
         return {"status": "success", "message": f"Webhook configured successfully to {webhook_url}"}
@@ -476,7 +485,8 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
             "period_text": meta.get("period_text", "Невідомий період"),
             "year": meta.get("year", "2026"),
             "date_filled": meta.get("date_filled", ""),
-            "raw_json": json.dumps(parsed_data)
+            "raw_json": json.dumps(parsed_data),
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
 
         # 2. Generate file fully in memory (no disk saving!)
