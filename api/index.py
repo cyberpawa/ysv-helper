@@ -7,6 +7,7 @@ import hashlib
 import asyncio
 import base64
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qsl
 from fastapi import FastAPI, Request, Header, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -409,6 +410,24 @@ async def get_archive(current_user: dict = Depends(get_current_tg_user)):
             .eq("chat_id", chat_id) \
             .order("id", desc=True) \
             .execute()
+        
+        # Устанавливаем целевой часовой пояс
+        target_tz = ZoneInfo("Europe/Kyiv")
+        
+        # Проходимся по всем записям и переводим время из UTC в локальное
+        for item in res.data:
+            if item.get("created_at"):
+                try:
+                    # Supabase возвращает время в формате "2026-07-11T20:57:00+00:00" или "Z"
+                    # Меняем Z на стандартное смещение и парсим
+                    safe_date_str = item["created_at"].replace("Z", "+00:00")
+                    dt_utc = datetime.fromisoformat(safe_date_str)
+                    
+                    # Переводим в местное время и обновляем строку ответа
+                    item["created_at"] = dt_utc.astimezone(target_tz).isoformat()
+                except Exception:
+                    pass # Если дата в нестандартном формате, оставляем как есть
+
         return {"status": "success", "archive": res.data}
     except Exception as e:
         return {"status": "error", "message": str(e)}
