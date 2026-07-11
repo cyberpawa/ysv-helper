@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Cropper from "cropperjs";
+import "cropperjs/dist/cropper.css";
 
 // -------------------------------------------------------------
 // TYPES & INTERFACES (For full safety and strict compilation)
@@ -139,6 +140,7 @@ export default function App() {
   const [titleText, setTitleText] = useState<string>("Перевірте дані (Редагування)");
   const [confirmButtonVisible, setConfirmButtonVisible] = useState<boolean>(true);
   const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
 
   // HTML5 Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -512,7 +514,7 @@ export default function App() {
         cropperInstanceRef.current = new Cropper(cropperImageRef.current, {
           aspectRatio: 1.414,
           viewMode: 1, 
-          autoCropArea: 1.0, 
+          autoCropArea: 0.9, 
           background: false,
           responsive: true,
           restore: false,
@@ -520,7 +522,63 @@ export default function App() {
           zoomable: false,       
           zoomOnTouch: false,    
           zoomOnWheel: false,    
-          dragMode: "move"
+          dragMode: "move",
+          ready() {
+            const cropper = cropperInstanceRef.current;
+            if (!cropper) return;
+            const containerData = cropper.getContainerData();
+            const imageData = cropper.getImageData();
+            if (containerData && imageData) {
+              const containerWidth = containerData.width;
+              const containerHeight = containerData.height;
+
+              // 1. Временно сожмем рамку в центр
+              cropper.setCropBoxData({
+                left: containerWidth / 2 - 10,
+                top: containerHeight / 2 - 10,
+                width: 20,
+                height: 20
+              });
+
+              // 2. Идеально вписываем картинку по алгоритму contain
+              const imgWidth = imageData.naturalWidth;
+              const imgHeight = imageData.naturalHeight;
+              const ratio = imgWidth / imgHeight;
+              const containerRatio = containerWidth / containerHeight;
+
+              let canvasWidth = containerWidth;
+              let canvasHeight = containerHeight;
+              if (ratio > containerRatio) {
+                canvasWidth = containerWidth;
+                canvasHeight = containerWidth / ratio;
+              } else {
+                canvasHeight = containerHeight;
+                canvasWidth = containerHeight * ratio;
+              }
+
+              cropper.setCanvasData({
+                left: (containerWidth - canvasWidth) / 2,
+                top: (containerHeight - canvasHeight) / 2,
+                width: canvasWidth,
+                height: canvasHeight
+              });
+
+              // 3. Рассчитываем и устанавливаем идеальный горизонтальный crop box
+              let boxWidth = canvasWidth * 0.9;
+              let boxHeight = boxWidth / 1.414;
+              if (boxHeight > canvasHeight * 0.9) {
+                boxHeight = canvasHeight * 0.9;
+                boxWidth = boxHeight * 1.414;
+              }
+
+              cropper.setCropBoxData({
+                left: (containerWidth - boxWidth) / 2,
+                top: (containerHeight - boxHeight) / 2,
+                width: boxWidth,
+                height: boxHeight
+              });
+            }
+          }
         } as any);
       };
 
@@ -537,49 +595,81 @@ export default function App() {
         try {
           cropperInstanceRef.current.destroy();
         } catch (e) {}
-          cropperInstanceRef.current = null;
+        cropperInstanceRef.current = null;
       }
     }
   }, [currentBase64Image]);
 
   const rotateCropImage = () => {
     triggerHaptic();
-    if (cropperInstanceRef.current) {
-      cropperInstanceRef.current.rotate(90);
+    const cropper = cropperInstanceRef.current;
+    if (cropper) {
+      // 1. Включаем плавный CSS-переход
+      setIsTransitioning(true);
       
-      setTimeout(() => {
-        if (cropperInstanceRef.current) {
-          const containerData = cropperInstanceRef.current.getContainerData();
-          const imageData = cropperInstanceRef.current.getImageData();
-          
-          if (containerData && imageData) {
-            const isRotated90or270 = Math.abs(imageData.rotate % 180) === 90;
-            const rotatedWidth = isRotated90or270 ? imageData.naturalHeight : imageData.naturalWidth;
-            const rotatedHeight = isRotated90or270 ? imageData.naturalWidth : imageData.naturalHeight;
-            const rotatedRatio = rotatedWidth / rotatedHeight;
-            
-            const targetWidth = containerData.width;
-            const targetHeight = targetWidth / rotatedRatio;
-            
-            cropperInstanceRef.current.setCanvasData({
-              left: 0,
-              top: (containerData.height - targetHeight) / 2,
-              width: targetWidth,
-              height: targetHeight
-            });
-            
-            const boxWidth = Math.min(targetWidth * 0.9, targetHeight * 1.414);
-            const boxHeight = boxWidth / 1.414;
-            
-            cropperInstanceRef.current.setCropBoxData({
-              left: (containerData.width - boxWidth) / 2,
-              top: (containerData.height - boxHeight) / 2,
-              width: boxWidth,
-              height: boxHeight
-            });
-          }
+      // 2. Вращаем картинку
+      cropper.rotate(90);
+      
+      // 3. Синхронно вычисляем и устанавливаем новые размеры
+      const containerData = cropper.getContainerData();
+      const imageData = cropper.getImageData();
+      
+      if (containerData && imageData) {
+        const containerWidth = containerData.width;
+        const containerHeight = containerData.height;
+
+        // Временно сжимаем рамку в центр, чтобы избежать конфликтов при масштабировании
+        cropper.setCropBoxData({
+          left: containerWidth / 2 - 10,
+          top: containerHeight / 2 - 10,
+          width: 20,
+          height: 20
+        });
+
+        const isRotated90or270 = Math.abs(imageData.rotate % 180) === 90;
+        const rotatedWidth = isRotated90or270 ? imageData.naturalHeight : imageData.naturalWidth;
+        const rotatedHeight = isRotated90or270 ? imageData.naturalWidth : imageData.naturalHeight;
+        
+        const ratio = rotatedWidth / rotatedHeight;
+        const containerRatio = containerWidth / containerHeight;
+
+        let canvasWidth = containerWidth;
+        let canvasHeight = containerHeight;
+        if (ratio > containerRatio) {
+          canvasWidth = containerWidth;
+          canvasHeight = containerWidth / ratio;
+        } else {
+          canvasHeight = containerHeight;
+          canvasWidth = containerHeight * ratio;
         }
-      }, 100);
+        
+        cropper.setCanvasData({
+          left: (containerWidth - canvasWidth) / 2,
+          top: (containerHeight - canvasHeight) / 2,
+          width: canvasWidth,
+          height: canvasHeight
+        });
+        
+        // Вычисляем максимальный горизонтальный crop box с соотношением 1.414, который гарантированно помещается внутри canvas
+        let boxWidth = canvasWidth * 0.9;
+        let boxHeight = boxWidth / 1.414;
+        if (boxHeight > canvasHeight * 0.9) {
+          boxHeight = canvasHeight * 0.9;
+          boxWidth = boxHeight * 1.414;
+        }
+        
+        cropper.setCropBoxData({
+          left: (containerWidth - boxWidth) / 2,
+          top: (containerHeight - boxHeight) / 2,
+          width: boxWidth,
+          height: boxHeight
+        });
+      }
+
+      // 4. Отключаем плавные переходы после завершения анимации
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 450);
     }
   };
 
@@ -591,10 +681,10 @@ export default function App() {
     const origW = croppedCanvas.width;
     const origH = croppedCanvas.height;
 
-    const cutX = origW * 0.15; 
-    const cutW = origW * 0.85; 
-    const cutY = origH * 0.15; 
-    const cutH = origH * 0.70; 
+    const cutX = 0; 
+    const cutW = origW; 
+    const cutY = 0; 
+    const cutH = origH; 
 
     const MAX_SIZE = 3000;
     let targetW = cutW;
@@ -1484,7 +1574,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 flex items-center justify-center overflow-hidden py-4">
-              <div className="w-full h-[58vh] bg-white/40 border border-white/80 rounded-2xl overflow-hidden flex items-center justify-center relative shadow-xl backdrop-blur-md">
+              <div className={`w-full h-[58vh] bg-white/40 border border-white/80 rounded-2xl overflow-hidden flex items-center justify-center relative shadow-xl backdrop-blur-md ${isTransitioning ? "cropper-transitioning" : ""}`}>
                 <img 
                   ref={cropperRefCallback} 
                   src={currentBase64Image || ""} 

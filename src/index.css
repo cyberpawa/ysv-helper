@@ -119,3 +119,16 @@ body, html {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.25);
 }
+
+/* Smooth transition styles for CropperJS */
+.cropper-transitioning .cropper-canvas,
+.cropper-transitioning .cropper-view-box img,
+.cropper-transitioning .cropper-canvas img,
+.cropper-transitioning .cropper-crop-box {
+  transition: transform 0.45s cubic-bezier(0.25, 1, 0.5, 1),
+              width 0.45s cubic-bezier(0.25, 1, 0.5, 1),
+              height 0.45s cubic-bezier(0.25, 1, 0.5, 1),
+              left 0.45s cubic-bezier(0.25, 1, 0.5, 1),
+              top 0.45s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
