@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Cropper from "cropperjs";
-import "cropperjs/dist/cropper.css";
 
 // -------------------------------------------------------------
 // TYPES & INTERFACES (For full safety and strict compilation)
