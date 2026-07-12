@@ -140,6 +140,12 @@ async def cmd_direct_message(message: types.Message, command: CommandObject, sta
     # Переводим бота в состояние ожидания самого сообщения
     await state.set_state(DirectMessageState.waiting_for_message)
 
+# Кнопка отмены для режима приватного сообщения
+@dp.message(Command("cancel"), DirectMessageState.waiting_for_message)
+async def cancel_direct_message(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("❌ Надсилання приватного повідомлення скасовано.")
+
 # 3. Ловим сообщение и отправляем адресату
 @dp.message(DirectMessageState.waiting_for_message)
 async def process_direct_message(message: types.Message, state: FSMContext):
