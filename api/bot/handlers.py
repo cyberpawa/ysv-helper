@@ -1,6 +1,6 @@
 import os
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -96,3 +96,68 @@ async def process_broadcast_message(message: types.Message, state: FSMContext):
         
     except Exception as e:
         await message.answer(f"❌ Виникла помилка при зверненні до бази даних: {str(e)}")
+
+# ==========================================
+# БЛОК ЛИЧНЫХ СООБЩЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА)
+# ==========================================
+
+# 1. Создаем класс состояний для личного сообщения
+class DirectMessageState(StatesGroup):
+    waiting_for_message = State()
+
+# 2. Команда для запуска отправки личного сообщения (/msg <ID>)
+@dp.message(Command("msg"))
+async def cmd_direct_message(message: types.Message, command: CommandObject, state: FSMContext):
+    # Проверка на админа
+    if message.from_user.id != ADMIN_ID:
+        return 
+
+    # Проверяем, передал ли админ ID пользователя
+    if not command.args:
+        await message.answer(
+            "⚠️ Використання: <code>/msg &lt;ID_користувача&gt;</code>\n"
+            "Наприклад: <code>/msg 123456789</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_chat_id = command.args.strip()
+    
+    # Защита от дурака: ID должен состоять только из цифр
+    if not target_chat_id.isdigit():
+        await message.answer("❌ ID користувача має складатися лише з цифр.")
+        return
+
+    # Сохраняем ID получателя в оперативную память состояния (FSM)
+    await state.update_data(target_chat_id=target_chat_id)
+    
+    await message.answer(
+        f"📨 Режим приватного повідомлення.\n\n"
+        f"Надішліть повідомлення (текст, фото або документ) для користувача <code>{target_chat_id}</code>.\n"
+        f"Для скасування напишіть /cancel",
+        parse_mode="HTML"
+    )
+    # Переводим бота в состояние ожидания самого сообщения
+    await state.set_state(DirectMessageState.waiting_for_message)
+
+# 3. Ловим сообщение и отправляем адресату
+@dp.message(DirectMessageState.waiting_for_message)
+async def process_direct_message(message: types.Message, state: FSMContext):
+    # Достаем сохраненный ID пользователя из памяти FSM
+    data = await state.get_data()
+    target_chat_id = data.get("target_chat_id")
+    
+    # Сразу выходим из режима ожидания
+    await state.clear() 
+    
+    try:
+        # Снова используем copy_to, чтобы переслать медиа, текст или файлы 1-в-1
+        await message.copy_to(chat_id=target_chat_id)
+        await message.answer(f"✅ Повідомлення успішно надіслано користувачу <code>{target_chat_id}</code>!", parse_mode="HTML")
+        
+    except Exception as e:
+        await message.answer(
+            f"❌ Не вдалося надіслати повідомлення.\n"
+            f"Можливо, користувач заблокував бота або ID вказано невірно.\n\n"
+            f"Деталі помилки: {str(e)}"
+        )
