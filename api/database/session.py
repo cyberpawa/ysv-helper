@@ -4,9 +4,10 @@ from supabase import create_client, Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
 
-# Create a lazy-initialized client
+# Глобальна змінна для лінивої ініціалізації клієнта
 supabase: Client = None
 
+# Функція створення або отримання існуючого клієнта БД
 def get_supabase() -> Client:
     global supabase
     if not supabase:

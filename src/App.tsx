@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from "motion/react";
 import Cropper from "cropperjs";
 
 // -------------------------------------------------------------
-// TYPES & INTERFACES (For full safety and strict compilation)
+// ТИПИ ТА ІНТЕРФЕЙСИ (Для повної суворої типізації TypeScript)
 // -------------------------------------------------------------
 export interface DocumentMeta {
   period_text?: string;
@@ -73,7 +73,7 @@ export interface ArchiveItem {
   created_at: string;
 }
 
-// Global window extensions for timesheet data-binding callbacks
+// Глобальні функції у вікні (window) для викликів з HTML-таблиці
 declare global {
   interface Window {
     editCell?: (empIndex: number, day: string, type: "hours" | "code", td: HTMLElement) => void;
@@ -85,7 +85,7 @@ declare global {
   }
 }
 
-// Helper to determine codes related to a 2x2 archive column on right side
+// Допоміжна функція для визначення кодів, які належать до колонок правої частини таблиці
 const getCodesForCol = (col: number): string[] => {
   if (col === 31) return ["В", "Щ", "Д", "8", "9", "10"];
   if (col === 32) return ["Н", "ВЧ", "11", "12", "13", "14", "15", "17", "22"];
@@ -95,21 +95,21 @@ const getCodesForCol = (col: number): string[] => {
   if (col === 36) return ["ПР", "24"];
   if (col === 37) return ["С", "25"];
   if (col === 38) return ["ТН", "Л", "26", "27"];
-  return []; // col 39 is others
+  return []; // 39-та колонка для решти кодів
 };
 
 export default function App() {
-  // Telegram WebApp Instance
+  // Екземпляр Telegram WebApp
   const tg = (window as any).Telegram?.WebApp;
 
-  // App screen states: 'menu' | 'camera' | 'crop' | 'review' | 'archive'
+  // Стани переключення екранів додатку
   const [screen, setScreen] = useState<"menu" | "camera" | "crop" | "review" | "archive">("menu");
   const [subScreen, setSubScreen] = useState<"preview" | "table">("preview");
   const [archiveMode, setArchiveMode] = useState<"view" | "email">("view");
   const [imageSource, setImageSource] = useState<"camera" | "upload">("camera");
   const [isReadOnly, setIsReadOnly] = useState<boolean>(false);
 
-  // Core Data States
+  // Основні стани для роботи з даними
   const [currentBase64Image, setCurrentBase64Image] = useState<string | null>(null);
   const [originalUploadedImage, setOriginalUploadedImage] = useState<string | null>(null);
   const [finalParsedData, setFinalParsedData] = useState<TimesheetData | null>(null);
@@ -118,7 +118,7 @@ export default function App() {
   const [archiveMessage, setArchiveMessage] = useState<string>("");
   const [currentArchiveId, setCurrentArchiveId] = useState<number | null>(null);
   
-  // Custom dialog state to prevent sandboxed iframe prompt() blocks
+  // Стан для кастомного діалогового вікна редагування комірок (обхід обмежень iframe на prompt)
   const [editingCell, setEditingCell] = useState<{
     empIndex: number;
     day?: string;
@@ -129,32 +129,32 @@ export default function App() {
     value: string;
   } | null>(null);
 
-  // Loading States
+  // Стани завантаження
   const [globalLoading, setGlobalLoading] = useState<boolean>(false);
   const [globalLoadingText, setGlobalLoadingText] = useState<string>("");
   const [captureLoading, setCaptureLoading] = useState<boolean>(false);
   
-  // UI & Viewport Controls
+  // Елементи інтерфейсу та управління
   const [zoomScale, setZoomScale] = useState<number>(0.82);
   const [titleText, setTitleText] = useState<string>("Перевірте дані (Редагування)");
   const [confirmButtonVisible, setConfirmButtonVisible] = useState<boolean>(true);
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
 
-  // HTML5 Refs
+  // Референси для HTML5 API (Камера, Зображення, Обрізка)
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cropperImageRef = useRef<HTMLImageElement | null>(null);
   const cropperInstanceRef = useRef<Cropper | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Dynamic API URL Resolution (uses local proxy to solve CORS cleanly)
+  // Динамічний вибір API URL (локальний проксі для CORS)
   const DEFAULT_BACKEND_URL = "/api";
   const BACKEND_URL = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost')
     ? ""
     : DEFAULT_BACKEND_URL;
 
-  // Header helpers
+  // Формування заголовків з автентифікацією Telegram
   const getAuthHeaders = (): HeadersInit => {
     const headers: { [key: string]: string } = {
       "Content-Type": "application/json",
@@ -165,7 +165,7 @@ export default function App() {
     return headers;
   };
 
-  // State Recovery (App Resumption) Trigger
+  // Механізм відновлення стану при перезавантаженні (відстеження процесу ШІ)
   useEffect(() => {
     let pollingInterval: any = null;
 
@@ -208,7 +208,7 @@ export default function App() {
             }
             setGlobalLoading(false);
             alert("❌ Помилка обробки: " + s.error_message);
-            // Clear status
+            // Скидання помилкового статусу в базі
             await fetch(`${BACKEND_URL}/state/reset`, {
               method: "POST",
               headers: getAuthHeaders()
@@ -227,7 +227,7 @@ export default function App() {
     };
   }, []);
 
-  // Initialize Telegram configurations
+  // Базові налаштування UI від Telegram
   useEffect(() => {
     if (tg) {
       tg.expand();
@@ -237,10 +237,10 @@ export default function App() {
     }
   }, [tg]);
 
-  // Handle Dynamic Telegram WebApp BackButton State
+  // Керування видимістю кнопки "Назад" у Telegram
   useEffect(() => {
     if (tg && tg.BackButton) {
-      // Прячем кнопку "Назад" в главном меню ИЛИ когда идет загрузка (globalLoading)
+      // Кнопка ховається на головному меню та при активному завантаженні
       if (screen === "menu" || globalLoading) {
         tg.BackButton.hide();
       } else {
@@ -249,6 +249,7 @@ export default function App() {
     }
   }, [screen, globalLoading, tg]);
 
+  // Логіка переходів по кнопці "Назад"
   useEffect(() => {
     if (tg && tg.BackButton) {
       const handleBack = () => {
@@ -276,7 +277,7 @@ export default function App() {
               setScreen("archive");
             } else {
               if (currentArchiveId !== null) {
-                // If editing from archive, return to read-only mode first
+                // Повернення до режиму перегляду архіву замість виходу
                 setIsReadOnly(true);
                 setTitleText("Перегляд архіву (Тільки читання)");
                 setConfirmButtonVisible(false);
@@ -297,7 +298,7 @@ export default function App() {
     }
   }, [screen, subScreen, imageSource, isReadOnly, tg, originalUploadedImage, currentArchiveId]);
 
-  // Active Camera Stream tracker and explicit disposal on change
+  // Включення/вимкнення камери в залежності від поточного екрану
   useEffect(() => {
     if (screen === "camera") {
       startCamera();
@@ -307,7 +308,7 @@ export default function App() {
     };
   }, [screen]);
 
-  // Integrated Telegram WebApp Haptic Impact
+  // Вібраційний відгук інтерфейсу Telegram
   const triggerHaptic = () => {
     if (tg && tg.HapticFeedback) {
       try {
@@ -319,7 +320,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // CAMERA ENGINE & CAPTURE LOGIC
+  // ЛОГІКА КАМЕРИ ТА ЗАХОПЛЕННЯ ЗОБРАЖЕННЯ
   // -------------------------------------------------------------
   const startCamera = async () => {
     stopCamera();
@@ -376,6 +377,7 @@ export default function App() {
     }
   };
 
+  // Розрахунок позиції та збереження кадру відносно गाइड-рамки
   const captureFrame = () => {
     triggerHaptic();
     setCaptureLoading(true);
@@ -472,7 +474,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // GALLERY IMAGE UPLOAD & CROPPER CONTROLS
+  // ЗАВАНТАЖЕННЯ ФАЙЛУ ТА НАЛАШТУВАННЯ CROPPER.JS
   // -------------------------------------------------------------
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -499,6 +501,7 @@ export default function App() {
     }
   }, []);
 
+  // Ініціалізація Cropper.js з фіксацією пропорцій
   const cropperRefCallback = useCallback((node: HTMLImageElement | null) => {
     if (node) {
       cropperImageRef.current = node;
@@ -532,7 +535,7 @@ export default function App() {
               const containerWidth = containerData.width;
               const containerHeight = containerData.height;
 
-              // 1. Временно сожмем рамку в центр
+              // Тимчасово зменшуємо зону обрізки
               cropper.setCropBoxData({
                 left: containerWidth / 2 - 10,
                 top: containerHeight / 2 - 10,
@@ -540,7 +543,7 @@ export default function App() {
                 height: 20
               });
 
-              // 2. Идеально вписываем картинку по алгоритму contain
+              // Масштабуємо зображення, щоб воно поміщалось в контейнер (object-fit: contain)
               const imgWidth = imageData.naturalWidth;
               const imgHeight = imageData.naturalHeight;
               const ratio = imgWidth / imgHeight;
@@ -563,7 +566,7 @@ export default function App() {
                 height: canvasHeight
               });
 
-              // 3. Рассчитываем и устанавливаем идеальный горизонтальный crop box
+              // Розраховуємо ідеальну пропорцію 1.414 для рамки
               let boxWidth = canvasWidth * 0.9;
               let boxHeight = boxWidth / 1.414;
               if (boxHeight > canvasHeight * 0.9) {
@@ -600,17 +603,15 @@ export default function App() {
     }
   }, [currentBase64Image]);
 
+  // Обертання зображення на 90 градусів із перерахунком рамок
   const rotateCropImage = () => {
     triggerHaptic();
     const cropper = cropperInstanceRef.current;
     if (cropper) {
-      // 1. Включаем плавный CSS-переход
       setIsTransitioning(true);
       
-      // 2. Вращаем картинку
       cropper.rotate(90);
       
-      // 3. Синхронно вычисляем и устанавливаем новые размеры
       const containerData = cropper.getContainerData();
       const imageData = cropper.getImageData();
       
@@ -618,7 +619,6 @@ export default function App() {
         const containerWidth = containerData.width;
         const containerHeight = containerData.height;
 
-        // Временно сжимаем рамку в центр, чтобы избежать конфликтов при масштабировании
         cropper.setCropBoxData({
           left: containerWidth / 2 - 10,
           top: containerHeight / 2 - 10,
@@ -650,7 +650,6 @@ export default function App() {
           height: canvasHeight
         });
         
-        // Вычисляем максимальный горизонтальный crop box с соотношением 1.414, который гарантированно помещается внутри canvas
         let boxWidth = canvasWidth * 0.9;
         let boxHeight = boxWidth / 1.414;
         if (boxHeight > canvasHeight * 0.9) {
@@ -666,7 +665,6 @@ export default function App() {
         });
       }
 
-      // 4. Отключаем плавные переходы после завершения анимации
       setTimeout(() => {
         setIsTransitioning(false);
       }, 450);
@@ -686,6 +684,7 @@ export default function App() {
     const cutY = 0; 
     const cutH = origH; 
 
+    // Обмеження максимального розміру для оптимізації
     const MAX_SIZE = 3000;
     let targetW = cutW;
     let targetH = cutH;
@@ -720,7 +719,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // SHI ANALYZER / BACKEND API COMMUNICATION
+  // ВИКЛИК ШІ (GEMINI) ДЛЯ РОЗПІЗНАВАННЯ ТЕКСТУ
   // -------------------------------------------------------------
   const analyzeTimesheetImage = async () => {
     triggerHaptic();
@@ -754,10 +753,11 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // TABLE GRID DATA ACTIONS (React State Wrappers)
+  // ЛОГІКА РЕДАГУВАННЯ ДАНИХ ТАБЛИЦІ
   // -------------------------------------------------------------
   useEffect(() => {
     if (screen === "review" && subScreen === "table") {
+      // Редагування робочих годин або кодів
       window.editCell = (empIndex: number, day: string, type: "hours" | "code", td: HTMLElement) => {
         if (isReadOnly) return;
         let currentVal = td.innerText.trim();
@@ -771,6 +771,7 @@ export default function App() {
         triggerHaptic();
       };
 
+      // Перемикання вихідних днів (заливка жовтим)
       window.toggleYellow = (day: string, td: HTMLElement) => {
         if (isReadOnly) return;
         setFinalParsedData((prev) => {
@@ -790,6 +791,7 @@ export default function App() {
         triggerHaptic();
       };
 
+      // Редагування загальних підсумків відпрацьованого часу
       window.editTotals = (empIndex: number, type: "days" | "hours", td: HTMLElement) => {
         if (isReadOnly) return;
         let currentVal = td.innerText.trim();
@@ -802,6 +804,7 @@ export default function App() {
         triggerHaptic();
       };
 
+      // Редагування тексту шапки (період, рік, дати)
       window.editMeta = (field: keyof DocumentMeta, element: HTMLElement) => {
         if (isReadOnly) return;
         let currentVal = element.innerText.trim();
@@ -815,6 +818,7 @@ export default function App() {
         triggerHaptic();
       };
 
+      // Редагування колонки "Всього неявок"
       window.editAbsenceTotal = (empIndex: number, td: HTMLElement) => {
         if (isReadOnly) return;
         const emp = finalParsedData?.employees?.[empIndex];
@@ -829,6 +833,7 @@ export default function App() {
         triggerHaptic();
       };
 
+      // Редагування причин неявок (коди, дні, години)
       window.editAbsenceReason = (empIndex: number, colIndex: number, td: HTMLElement) => {
         if (isReadOnly) return;
         let defaultVal = td.querySelector("div") 
@@ -865,6 +870,7 @@ export default function App() {
     setZoomScale((z) => Math.max(z - 0.1, 0.4));
   };
 
+  // Збереження введених даних з діалогового вікна до головного стану
   const handleSaveEditingCell = () => {
     if (!editingCell) return;
     const { empIndex, day, type, metaField, colIndex, value } = editingCell;
@@ -938,7 +944,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // ASYNC ARCHIVE LOADER
+  // РОБОТА З АРХІВОМ БАЗИ ДАНИХ
   // -------------------------------------------------------------
   const formatLocalDate = (utcString: string) => {
     try {
@@ -955,6 +961,7 @@ export default function App() {
     }
   };
 
+  // Отримання списку архівних табелів
   const loadArchiveList = async (mode: "view" | "email") => {
     triggerHaptic();
     setArchiveMode(mode);
@@ -983,6 +990,7 @@ export default function App() {
     }
   };
 
+  // Завантаження даних конкретного табеля з архіву
   const openArchivedItem = async (tabelId: number) => {
     triggerHaptic();
     setGlobalLoadingText("Завантажуємо деталі архіву...");
@@ -1013,7 +1021,7 @@ export default function App() {
     }
   };
 
-  // Switch archived timesheet view from Read-Only to Editable Mode
+  // Дозвіл на зміну архівного документу
   const toggleEditArchiveMode = () => {
     triggerHaptic();
     setIsReadOnly(false);
@@ -1021,7 +1029,7 @@ export default function App() {
     setConfirmButtonVisible(true);
   };
 
-  // Save changes back to the serverless archive database
+  // Оновлення запису в базі даних після редагування архівного табеля
   const saveArchivedChanges = async () => {
     triggerHaptic();
     if (!finalParsedData || currentArchiveId === null) return;
@@ -1043,7 +1051,6 @@ export default function App() {
         setIsReadOnly(true);
         setConfirmButtonVisible(false);
         setTitleText("Перегляд архіву (Тільки читання)");
-        // Update local list
         loadArchiveList("view");
       } else {
         alert("❌ Помилка оновлення: " + result.message);
@@ -1055,7 +1062,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // EMAIL / SMTP & TELEGRAM BOT GENERATION CHANNELS
+  // ГЕНЕРАЦІЯ ЕКСПОРТНИХ ФАЙЛІВ ТА ВІДПРАВКА
   // -------------------------------------------------------------
   const sendTabelToEmailAddress = async (tabelId: number, periodStr: string, yearStr: string) => {
     triggerHaptic();
@@ -1090,7 +1097,7 @@ export default function App() {
     triggerHaptic();
     if (!finalParsedData) return;
   
-    // If we are currently editing an existing archived item, delegate to saveArchivedChanges
+    // Якщо відкритий архівний файл, то просто зберігаємо зміни
     if (currentArchiveId !== null) {
       saveArchivedChanges();
       return;
@@ -1125,7 +1132,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // TRIGGER STATE FROM HEAD BAR DIRECT HANDLERS
+  // ОБРОБНИКИ ДЛЯ КНОПОК ГОЛОВНОГО МЕНЮ
   // -------------------------------------------------------------
   const handleScanClick = () => {
     triggerHaptic();
@@ -1157,7 +1164,7 @@ export default function App() {
   };
 
   // -------------------------------------------------------------
-  // ORIGINAL HTML GENERATOR RENDER (STRICTLY PRESERVED AS PER DIRECTIVES)
+  // ДИНАМІЧНИЙ HTML-РЕНДЕР ТАБЛИЦІ (СУВОРО ЗБЕРЕЖЕНО СТРУКТУРУ)
   // -------------------------------------------------------------
   const generatedTableHtml = useMemo(() => {
     if (!finalParsedData) return "";
@@ -1280,12 +1287,12 @@ export default function App() {
   }, [finalParsedData, isReadOnly]);
 
   // -------------------------------------------------------------
-  // VIEW RENDER LAYOUT WITH MOTION TRANSITIONS
+  // ГОЛОВНИЙ РЕНДЕР ІНТЕРФЕЙСУ (ВІЗУАЛЬНА ЧАСТИНА)
   // -------------------------------------------------------------
   return (
     <div className="w-full h-full min-h-screen railway-ambient-bg flex flex-col items-center overflow-hidden relative">
       
-      {/* Premium Programmatic Railway tracks & Animating Trains */}
+      {/* Анімований фон з коліями поїздів */}
       <div className="absolute inset-0 w-full h-full pointer-events-none select-none z-0 overflow-hidden">
         <svg className="w-full h-full" viewBox="0 0 1000 1000" preserveAspectRatio="none">
           <defs>
@@ -1310,26 +1317,26 @@ export default function App() {
             </filter>
           </defs>
 
-          {/* Tracks */}
+          {/* Лінії колій */}
           <path d="M-500 150 Q 300 -100, 1500 150" stroke="rgba(0, 122, 255, 0.12)" strokeWidth="14" strokeDasharray="3,18" fill="none" />
           <path d="M-500 143 Q 300 -100, 1500 143" stroke="rgba(0, 122, 255, 0.25)" strokeWidth="1.5" fill="none" />
           <path d="M-500 157 Q 300 -100, 1500 157" stroke="rgba(0, 122, 255, 0.25)" strokeWidth="1.5" fill="none" />
 
-          {/* Central Straight Rail Track */}
+          {/* Центральна пряма колія */}
           <path d="M-500 700 L 1500 700" stroke="rgba(0, 122, 255, 0.14)" strokeWidth="14" strokeDasharray="3,12" fill="none" />
           <path d="M-500 693 L 1500 693" stroke="rgba(0, 122, 255, 0.28)" strokeWidth="1.5" fill="none" />
           <path d="M-500 707 L 1500 707" stroke="rgba(0, 122, 255, 0.28)" strokeWidth="1.5" fill="none" />
 
-          {/* Graceful bottom curve rail track */}
+          {/* Нижня зігнута колія */}
           <path d="M-500 850 Q 500 1020, 1500 730" stroke="rgba(142, 142, 147, 0.09)" strokeWidth="18" strokeDasharray="4,24" fill="none" />
           <path d="M-500 841 Q 500 1020, 1500 721" stroke="rgba(142, 142, 147, 0.22)" strokeWidth="1.5" fill="none" />
           <path d="M-500 859 Q 500 1020, 1500 739" stroke="rgba(142, 142, 147, 0.22)" strokeWidth="1.5" fill="none" />
 
-          {/* Light refractions */}
+          {/* Декоративні відблиски світла */}
           <path d="M40 250 L 300 280 L 260 310 Z" fill="rgba(0, 122, 255, 0.03)" filter="blur(12px)" />
           <path d="M600 700 L 920 620 L 880 670 Z" fill="rgba(142, 142, 147, 0.02)" filter="blur(16px)" />
 
-          {/* Animating Train 1 */}
+          {/* Анімація першого поїзда */}
           <g>
             <path 
               d="M-500 150 Q 300 -100, 1500 150" 
@@ -1370,7 +1377,7 @@ export default function App() {
             </path>
           </g>
 
-          {/* Animating Train 2 */}
+          {/* Анімація другого поїзда */}
           <g>
             <path 
               d="M-500 700 L 1500 700" 
@@ -1413,7 +1420,7 @@ export default function App() {
         </svg>
       </div>
 
-      {/* Hidden File Picker */}
+      {/* Прихований input для вибору файлів */}
       <input 
         type="file" 
         ref={hiddenFileInputRef} 
@@ -1423,7 +1430,7 @@ export default function App() {
       />
 
       {/* ========================================== */}
-      {/* MENU / DASHBOARD SCREEN                    */}
+      {/* ЕКРАН ГОЛОВНОГО МЕНЮ                       */}
       {/* ========================================== */}
       <div 
         style={{ display: screen === "menu" ? "flex" : "none" }}
@@ -1436,7 +1443,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 flex flex-col justify-center py-4">
-          {/* Primary scan Action */}
+          {/* Кнопка активації камери */}
           <button 
             onClick={handleScanClick}
             className="w-full ios-frosted-glass rounded-2xl p-6 flex flex-col items-center justify-center text-center shadow-lg cursor-pointer min-h-[160px] relative overflow-hidden group border border-white/60 ios-touchable"
@@ -1449,7 +1456,7 @@ export default function App() {
             <p className="text-xs text-gray-500 mt-1.5 max-w-[240px]">Оцифруйте паперовий табель за допомогою камери</p>
           </button>
 
-          {/* Secondary Actions Grid */}
+          {/* Сітка додаткових кнопок меню */}
           <div className="grid grid-cols-2 gap-4 mt-4 select-none">
             <button 
               onClick={handleUploadClick}
@@ -1499,7 +1506,7 @@ export default function App() {
       <AnimatePresence mode="wait">
 
         {/* ========================================== */}
-        {/* CAMERA SCREEN                               */}
+        {/* ЕКРАН КАМЕРИ                               */}
         {/* ========================================== */}
         {screen === "camera" && (
           <motion.div 
@@ -1558,7 +1565,7 @@ export default function App() {
         )}
 
         {/* ========================================== */}
-        {/* CROP SCREEN                                */}
+        {/* ЕКРАН ОБРІЗКИ (CROPPER)                    */}
         {/* ========================================== */}
         {screen === "crop" && (
           <motion.div 
@@ -1606,7 +1613,7 @@ export default function App() {
         )}
 
         {/* ========================================== */}
-        {/* REVIEW SCREEN                              */}
+        {/* ЕКРАН ПЕРЕВІРКИ ТАБЛИЦІ                    */}
         {/* ========================================== */}
         {screen === "review" && (
           <motion.div 
@@ -1616,6 +1623,7 @@ export default function App() {
             exit={{ opacity: 0, y: -15 }}
             className="w-full h-screen max-h-screen overflow-hidden flex flex-col items-center justify-between p-4"
           >
+            {/* Під-екран прев'ю фото перед надсиланням ШІ */}
             {subScreen === "preview" && (
               <div className="w-full max-w-md px-2 flex flex-col flex-1 justify-between py-6">
                 <div className="text-center select-none pt-4">
@@ -1645,6 +1653,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Під-екран відображення та редагування таблиці */}
             {subScreen === "table" && (
               <div className="w-full flex-1 min-h-0 flex flex-col justify-between pt-1 pb-2">
                 
@@ -1662,7 +1671,7 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Zoom scale controller */}
+                  {/* Блок управління масштабуванням */}
                   <div className="flex gap-4 items-center justify-center bg-white/45 py-2 px-4 rounded-xl shadow-inner-sm">
                     <button 
                       onClick={decrementZoom}
@@ -1689,6 +1698,7 @@ export default function App() {
                   />
                 </div>
 
+                {/* Кнопка генерації або збереження змін */}
                 {confirmButtonVisible && (
                   <div className="w-full ios-frosted-glass rounded-2xl p-4 flex flex-col items-center border border-white/60 mt-2 select-none shrink-0">
                     <button 
@@ -1706,7 +1716,7 @@ export default function App() {
         )}
 
         {/* ========================================== */}
-        {/* ARCHIVE VIEW SCREEN                        */}
+        {/* ЕКРАН АРХІВУ                               */}
         {/* ========================================== */}
         {screen === "archive" && (
           <motion.div 
@@ -1773,7 +1783,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* ========================================================= */}
-      {/* ADVANCED FULL-SCREEN TRAIN LOADER                         */}
+      {/* ГЛОБАЛЬНИЙ ЕКРАН ЗАВАНТАЖЕННЯ (Анімація поїзда)            */}
       {/* ========================================================= */}
       <AnimatePresence>
         {globalLoading && (
@@ -1842,7 +1852,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Custom cell/metadata editing dialog popup to avoid sandboxed iframe prompt() blocks */}
+      {/* Модальне вікно для редагування комірки (уникає prompt) */}
       {editingCell && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 select-none">
           <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">

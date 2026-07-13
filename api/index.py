@@ -14,14 +14,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import google.generativeai as genai
-
-# Database, Services & Bot
 from api.database.session import get_supabase
 from api.services.excel_service import generate_excel_bytes
 from api.services.email_service import send_tabel_email_bytes
 from api.bot.handlers import bot, dp
 
-# Initialize Gemini if key is provided
+# Налаштування доступу до Gemini API
 GEMINI_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
 if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY, transport="rest")
@@ -132,6 +130,7 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
 """
 )
 
+# Адаптація JSON-відповіді від ШІ до попередньої структури даних
 def transform_ai_json_to_legacy(ai_json):
     legacy_json = {"document_meta": ai_json.get("document_meta", {}), "employees": []}
     for emp in ai_json.get("employees", []):
@@ -163,6 +162,7 @@ def transform_ai_json_to_legacy(ai_json):
 
 BOT_TOKEN = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 
+# Перевірка валідності даних, отриманих від Telegram Mini App
 def verify_telegram_init_data(init_data: str) -> dict:
     if not BOT_TOKEN:
         raise HTTPException(
@@ -192,8 +192,7 @@ def verify_telegram_init_data(init_data: str) -> dict:
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if calculated_hash != received_hash:
-        # For seamless local development preview testing inside AI Studio when BOT_TOKEN isn't set,
-        # fallback if requested so developers aren't blocked, but enforce in real bot usage
+        # Дозвіл на локальне тестування, якщо підпис не збігається
         if os.getenv("NODE_ENV") != "production" or os.getenv("ALLOW_MOCK_TELEGRAM") == "true":
              return {"id": 1234567, "first_name": "Developer"}
         raise HTTPException(
@@ -216,9 +215,10 @@ def verify_telegram_init_data(init_data: str) -> dict:
              detail="Failed to parse Telegram user JSON."
          )
 
+# Отримання інформації про поточного користувача через заголовки
 def get_current_tg_user(x_telegram_init_data: str = Header(None, alias="X-Telegram-Init-Data")) -> dict:
     if not x_telegram_init_data:
-        # Fallback for development/testing inside standard browser IFrames
+        # Фіктивні дані для локальної розробки
         if os.getenv("NODE_ENV") != "production" or os.getenv("ALLOW_MOCK_TELEGRAM") == "true":
             return {"id": 1234567, "first_name": "Developer"}
         raise HTTPException(
@@ -227,7 +227,7 @@ def get_current_tg_user(x_telegram_init_data: str = Header(None, alias="X-Telegr
         )
     return verify_telegram_init_data(x_telegram_init_data)
 
-# Initialize FastAPI App (Webhook mode - No lifespan polling)
+# Створення інстансу додатку FastAPI
 app = FastAPI()
 
 app.add_middleware(
@@ -238,7 +238,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Telegram Webhook endpoint
+# Точка входу для оновлень від Telegram
 @app.post("/api/telegram")
 async def telegram_webhook(request: Request):
     if not dp or not bot:
@@ -252,16 +252,16 @@ async def telegram_webhook(request: Request):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+# Встановлення webhook для зв'язку з Telegram
 @app.get("/api/setup-webhook")
 async def setup_webhook(request: Request, secret: str = None):
-    # Базовая защита: эндпоинт сработает только если передать секретный пароль
+    # Примітивний захист доступу за допомогою секретного ключа
     if secret != "super_admin_123":
         return {"status": "error", "message": "Доступ заборонено"}
 
     if not bot:
         return {"status": "error", "message": "BOT_TOKEN not configured"}
     
-    # Жестко отрезаем слеш в конце, откуда бы он ни пришел
     raw_app_url = os.getenv("APP_URL") or str(request.base_url)
     app_url = raw_app_url.rstrip("/")
     webhook_url = f"{app_url}/api/telegram"
@@ -272,7 +272,7 @@ async def setup_webhook(request: Request, secret: str = None):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# State Recovery / App Resumption Endpoints
+# Отримання поточного статусу обробки для користувача
 @app.get("/api/state")
 async def get_user_state(current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -285,6 +285,7 @@ async def get_user_state(current_user: dict = Depends(get_current_tg_user)):
         print(f"Failed to fetch state: {e}")
     return {"status": "success", "state": {"chat_id": chat_id, "status": "idle"}}
 
+# Примусове скидання стану користувача
 @app.post("/api/state/reset")
 async def reset_user_state(current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -300,7 +301,7 @@ async def reset_user_state(current_user: dict = Depends(get_current_tg_user)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# Timesheet Scanning & Processing Endpoint
+# Обробка завантаженого зображення табеля
 @app.post("/api/upload")
 async def receive_image(request: Request, current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -311,7 +312,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         
     supabase = get_supabase()
     
-    # 1. Update State to 'processing'
+    # Оновлюємо статус в базі
     try:
         supabase.table("user_state").upsert({
             "chat_id": chat_id,
@@ -322,7 +323,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     except Exception as state_err:
         print(f"Error saving state: {state_err}")
 
-    # 2. Telegram Start Notification
+    # Сповіщаємо користувача про початок процесу
     if bot:
         try:
             await bot.send_message(chat_id, "⏳ Розпочато аналіз табеля за допомогою ШІ. Зачекайте, будь ласка...")
@@ -337,7 +338,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         
         prompt = "Проаналізуй цю таблицю."
         
-        # Call Gemini AI
+        # Виклик моделі для розпізнавання тексту
         response = await asyncio.to_thread(
             model.generate_content, 
             [prompt, image_part],
@@ -356,7 +357,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         parsed_data = json.loads(match.group(0))
         legacy_data = transform_ai_json_to_legacy(parsed_data)
         
-        # 3. Success State & Telegram Notification
+        # Збереження успішного результату
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -367,6 +368,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         except Exception as save_err:
             print(f"Failed to save final state: {save_err}")
 
+        # Сповіщення про успіх
         if bot:
             try:
                 await bot.send_message(chat_id, "✅ Аналіз табеля завершено! Дані готові для перевірки у додатку.")
@@ -380,7 +382,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         if "429" in error_msg or "Quota exceeded" in error_msg:
             error_msg = "Перевищено ліміт запитів ШІ. Спробуйте через 30 секунд."
             
-        # 4. Error State & Telegram Notification
+        # Збереження інформації про помилку
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -391,6 +393,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         except Exception as save_err:
             print(f"Failed to save error state: {save_err}")
 
+        # Інформування користувача про збій
         if bot:
             try:
                 await bot.send_message(chat_id, f"❌ Виникла помилка під час аналізу табеля: {error_msg}")
@@ -399,7 +402,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
 
         return {"status": "error", "message": error_msg}
 
-# Timesheet Archive Endpoints
+# Отримання архіву оброблених табелів користувача
 @app.get("/api/archive")
 async def get_archive(current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -411,27 +414,23 @@ async def get_archive(current_user: dict = Depends(get_current_tg_user)):
             .order("id", desc=True) \
             .execute()
         
-        # Устанавливаем целевой часовой пояс
+        # Приведення часових міток до Київського часу
         target_tz = ZoneInfo("Europe/Kyiv")
         
-        # Проходимся по всем записям и переводим время из UTC в локальное
         for item in res.data:
             if item.get("created_at"):
                 try:
-                    # Supabase возвращает время в формате "2026-07-11T20:57:00+00:00" или "Z"
-                    # Меняем Z на стандартное смещение и парсим
                     safe_date_str = item["created_at"].replace("Z", "+00:00")
                     dt_utc = datetime.fromisoformat(safe_date_str)
-                    
-                    # Переводим в местное время и обновляем строку ответа
                     item["created_at"] = dt_utc.astimezone(target_tz).isoformat()
                 except Exception:
-                    pass # Если дата в нестандартном формате, оставляем как есть
+                    pass 
 
         return {"status": "success", "archive": res.data}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# Отримання детальної інформації про архівний табель
 @app.get("/api/archive/detail/{tabel_id}")
 async def get_archive_detail(tabel_id: int, current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -451,6 +450,7 @@ async def get_archive_detail(tabel_id: int, current_user: dict = Depends(get_cur
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Оновлення даних вже існуючого архівного табеля
 @app.post("/api/archive/update/{tabel_id}")
 async def update_archive_item(tabel_id: int, request: Request, current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
@@ -462,7 +462,7 @@ async def update_archive_item(tabel_id: int, request: Request, current_user: dic
     meta = updated_data.get("document_meta", {})
     supabase = get_supabase()
     try:
-        # Enforce IDOR security boundary (chat_id = current_user.id)
+        # Перевірка доступу до запису через ID користувача
         res = supabase.table("tabel_archive") \
             .update({
                 "period_text": meta.get("period_text", "Невідомий період"),
@@ -489,6 +489,7 @@ class ExcelRequest(BaseModel):
 class EmailRequest(BaseModel):
     tabel_id: int
 
+# Генерація файлу табеля у форматі Excel
 @app.post("/api/generate-excel")
 async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_current_tg_user)):
     try:
@@ -498,7 +499,7 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
         
         supabase = get_supabase()
         
-        # 1. Insert new entry to database archive table
+        # Додавання нового запису в таблицю архіву
         archive_res = supabase.table("tabel_archive").insert({
             "chat_id": chat_id,
             "period_text": meta.get("period_text", "Невідомий період"),
@@ -508,10 +509,10 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
 
-        # 2. Generate file fully in memory (no disk saving!)
+        # Формування Excel-документа виключно в оперативній пам'яті
         excel_bytes = generate_excel_bytes(parsed_data)
         
-        # 3. Direct document submission to Telegram chat via Bot
+        # Відправка готового файлу користувачу в Telegram
         try:
             from aiogram.types import BufferedInputFile
             safe_period = meta.get('period_text', 'заповнений').replace(' ', '_').replace('/', '-')
@@ -525,7 +526,7 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
         except Exception as bot_err:
             print(f"⚠️ Telegram sending failed: {bot_err}")
 
-        # 4. Clear/reset user state to idle after fully completing
+        # Очищення поточного стану користувача
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -540,12 +541,13 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# Відправлення згенерованого Excel-файлу електронною поштою
 @app.post("/api/send-email")
 async def send_email_endpoint(req: EmailRequest, current_user: dict = Depends(get_current_tg_user)):
     chat_id = current_user.get("id")
     supabase = get_supabase()
     
-    # Fetch record and enforce strict ownership verification
+    # Верифікація власника архівного запису
     res = supabase.table("tabel_archive") \
         .select("*") \
         .eq("id", req.tabel_id) \

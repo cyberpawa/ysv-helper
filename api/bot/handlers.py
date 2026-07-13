@@ -4,19 +4,20 @@ from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-# Импортируем функцию для работы с базой данных из твоего проекта
 from api.database.session import get_supabase
 
+# Налаштування інстансу бота та диспетчера подій
 BOT_TOKEN = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
 dp = Dispatcher()
 
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
-# 1. Создаем класс состояний для режима рассылки
+# FSM стан для процесу масової розсилки
 class BroadcastState(StatesGroup):
     waiting_for_message = State()
 
+# Стартове повідомлення бота
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     await message.answer(
@@ -25,14 +26,10 @@ async def cmd_start(message: types.Message):
         "Будь ласка, скористайтеся кнопкою меню внизу екрана для входу."
     )
 
-# ==========================================
-# БЛОК РАССЫЛКИ (ТОЛЬКО ДЛЯ АДМИНА)
-# ==========================================
-
-# 2. Команда для запуска рассылки
+# Активація режиму розсилки для адміністратора
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: types.Message, state: FSMContext):
-    # Если пишет не админ, просто выходим (бот промолчит)
+    # Ігноруємо запит, якщо ініціатор не є адміністратором
     if message.from_user.id != ADMIN_ID:
         return 
 
@@ -41,19 +38,19 @@ async def cmd_broadcast(message: types.Message, state: FSMContext):
         "Надішліть повідомлення (текст, фото або документ), яке потрібно розіслати всім користувачам.\n"
         "Для скасування напишіть /cancel"
     )
-    # Переводим бота в состояние ожидания сообщения
+    # Очікуємо на ввід контенту для розсилки
     await state.set_state(BroadcastState.waiting_for_message)
 
-# 3. Кнопка отмены (если передумал рассылать)
+# Переривання процесу розсилки
 @dp.message(Command("cancel"), BroadcastState.waiting_for_message)
 async def cancel_broadcast(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("❌ Розсилку скасовано.")
 
-# 4. Ловим само сообщение и начинаем рассылать
+# Виконання розсилки після отримання повідомлення від адміністратора
 @dp.message(BroadcastState.waiting_for_message)
 async def process_broadcast_message(message: types.Message, state: FSMContext):
-    # Сразу выходим из режима ожидания, чтобы следующие сообщения не шли в рассылку
+    # Очищуємо стан, щоб уникнути помилкових повторних відправок
     await state.clear() 
     
     await message.answer("⏳ Збираю базу користувачів та розпочинаю розсилку...")
@@ -63,29 +60,27 @@ async def process_broadcast_message(message: types.Message, state: FSMContext):
     error_count = 0
     
     try:
-        # Достаем всех пользователей, которые когда-либо запускали бота (из таблицы user_state)
+        # Збираємо аудиторію з бази даних архіву
         res = supabase.table("tabel_archive").select("chat_id").execute()
         
         if not res.data:
             await message.answer("В базі даних ще немає жодного користувача.")
             return
             
-        # Используем set(), чтобы убрать возможные дубликаты ID
+        # Формуємо унікальну множину ID для уникнення дублікатів
         users = set(item["chat_id"] for item in res.data if item.get("chat_id"))
         
         for chat_id in users:
             try:
-                # Метод copy_to идеален для рассылок: он копирует сообщение "как есть", 
-                # поддерживая форматирование, картинки, кнопки и файлы.
+                # Відправляємо копію повідомлення зі збереженням структури та медіа
                 await message.copy_to(chat_id)
                 success_count += 1
                 
-                # КРИТИЧЕСКИ ВАЖНО: Защита от спам-фильтра Telegram (Flood Limit)
-                # Без этой паузы Telegram навсегда заблокирует бота при отправке >30 сообщений в секунду
+                # Затримка для уникнення блокування від Telegram за спам
                 await asyncio.sleep(0.05) 
                 
             except Exception:
-                # Ошибка обычно значит, что пользователь заблокировал бота или удалил чат
+                # Рахуємо тих, хто заблокував бота або видалив акаунт
                 error_count += 1
                 
         await message.answer(
@@ -97,22 +92,18 @@ async def process_broadcast_message(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Виникла помилка при зверненні до бази даних: {str(e)}")
 
-# ==========================================
-# БЛОК ЛИЧНЫХ СООБЩЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА)
-# ==========================================
-
-# 1. Создаем класс состояний для личного сообщения
+# FSM стан для надсилання повідомлення конкретному користувачу
 class DirectMessageState(StatesGroup):
     waiting_for_message = State()
 
-# 2. Команда для запуска отправки личного сообщения (/msg <ID>)
+# Команда для ініціації приватного повідомлення
 @dp.message(Command("msg"))
 async def cmd_direct_message(message: types.Message, command: CommandObject, state: FSMContext):
-    # Проверка на админа
+    # Перевірка прав адміністратора
     if message.from_user.id != ADMIN_ID:
         return 
 
-    # Проверяем, передал ли админ ID пользователя
+    # Перевірка наявності аргументу з ID
     if not command.args:
         await message.answer(
             "⚠️ Використання: <code>/msg &lt;ID_користувача&gt;</code>\n"
@@ -123,12 +114,12 @@ async def cmd_direct_message(message: types.Message, command: CommandObject, sta
 
     target_chat_id = command.args.strip()
     
-    # Защита от дурака: ID должен состоять только из цифр
+    # Валідація формату ID
     if not target_chat_id.isdigit():
         await message.answer("❌ ID користувача має складатися лише з цифр.")
         return
 
-    # Сохраняем ID получателя в оперативную память состояния (FSM)
+    # Зберігаємо ID отримувача у контексті стану
     await state.update_data(target_chat_id=target_chat_id)
     
     await message.answer(
@@ -137,27 +128,27 @@ async def cmd_direct_message(message: types.Message, command: CommandObject, sta
         f"Для скасування напишіть /cancel",
         parse_mode="HTML"
     )
-    # Переводим бота в состояние ожидания самого сообщения
+    # Активуємо стан очікування контенту
     await state.set_state(DirectMessageState.waiting_for_message)
 
-# Кнопка отмены для режима приватного сообщения
+# Переривання процесу надсилання приватного повідомлення
 @dp.message(Command("cancel"), DirectMessageState.waiting_for_message)
 async def cancel_direct_message(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("❌ Надсилання приватного повідомлення скасовано.")
 
-# 3. Ловим сообщение и отправляем адресату
+# Надсилання зібраного контенту заданому користувачу
 @dp.message(DirectMessageState.waiting_for_message)
 async def process_direct_message(message: types.Message, state: FSMContext):
-    # Достаем сохраненный ID пользователя из памяти FSM
+    # Отримуємо цільовий ID із пам'яті FSM
     data = await state.get_data()
     target_chat_id = data.get("target_chat_id")
     
-    # Сразу выходим из режима ожидания
+    # Деактивуємо стан очікування
     await state.clear() 
     
     try:
-        # Снова используем copy_to, чтобы переслать медиа, текст или файлы 1-в-1
+        # Пересилаємо повідомлення адресату
         await message.copy_to(chat_id=target_chat_id)
         await message.answer(f"✅ Повідомлення успішно надіслано користувачу <code>{target_chat_id}</code>!", parse_mode="HTML")
         

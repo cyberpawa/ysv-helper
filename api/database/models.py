@@ -12,7 +12,7 @@ class TabelArchive(BaseModel):
 
 class UserState(BaseModel):
     chat_id: int
-    status: str  # 'idle', 'processing', 'ready', 'error'
+    status: str  # Варіанти статусу: 'idle', 'processing', 'ready', 'error'
     raw_json: Optional[str] = None
     error_message: Optional[str] = None
     updated_at: Optional[str] = None

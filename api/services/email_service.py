@@ -7,6 +7,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import Header
 
+# Основна функція для надсилання згенерованого Excel-файлу електронною поштою
 def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, year_text: str) -> dict:
     sender_email = os.getenv("SENDER_EMAIL")
     sender_password = os.getenv("SENDER_PASSWORD")
@@ -17,6 +18,7 @@ def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, 
     if not all([sender_email, sender_password, target_email]):
         return {"status": "error", "message": "Налаштування пошти (.env) відсутні або неповні."}
 
+    # Формування базових метаданих повідомлення
     subject = f"Табель обліку робочого часу за {period_text} {year_text}"
     body = (
         f"Добрий день!\n\n"
@@ -27,12 +29,14 @@ def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, 
     safe_period = period_text.replace(' ', '_').replace('/', '-')
     filename = f"Табель_за_{safe_period}_{year_text}.xlsx"
 
+    # Створення об'єкта листа
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = target_email
     msg['Subject'] = Header(subject, 'utf-8').encode()
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
+    # Додавання вкладення у вигляді байтового потоку
     part = MIMEBase("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     part.set_payload(excel_bytes)
     encoders.encode_base64(part)
@@ -41,7 +45,7 @@ def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, 
     part.add_header('Content-Disposition', 'attachment', filename=encoded_filename)
     msg.attach(part)
 
-    # IPv4 forcing for robustness in restricted cloud networks
+    # Примусове використання IPv4 для обходу обмежень у деяких хмарних мережах
     if "gmail.com" in smtp_server.lower():
         try:
             resolved = socket.getaddrinfo(smtp_server, smtp_port, socket.AF_INET)
@@ -50,6 +54,7 @@ def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, 
         except Exception as e:
             print(f"⚠️ IPv4 force failed: {e}")
 
+    # Відправлення через безпечне з'єднання залежно від порту
     if smtp_port == 465:
         with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=15) as server:
             server.login(sender_email, sender_password)
