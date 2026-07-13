@@ -3,6 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
 
 from api.database.session import get_supabase
 
@@ -20,11 +21,27 @@ class BroadcastState(StatesGroup):
 # Стартове повідомлення бота
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
-    await message.answer(
-        "Вітаю! Я ваш асистент для оцифрування табелів робочого часу.\n\n"
-        "Вся робота, архів та сканування проходять у Mini App. "
-        "Будь ласка, скористайтеся кнопкою меню внизу екрана для входу."
-    )
+    if message.from_user.id == ADMIN_ID:
+        await message.answer(
+            "👨‍💻 Вітаю, адміне! Тобі доступний ввід тексту та команди (/broadcast, /msg).",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    else:
+        app_url = os.getenv("APP_URL", "https://ysv-helper.vercel.app").rstrip("/")
+        
+        markup = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📱 Відкрити Mini App", web_app=WebAppInfo(url=app_url))]
+            ],
+            resize_keyboard=True,
+            is_persistent=True
+        )
+        
+        await message.answer(
+            "Вітаю! Я ваш асистент для оцифрування табелів робочого часу.\n\n"
+            "Натисніть велику кнопку нижче, щоб відкрити програму.",
+            reply_markup=markup
+        )
 
 # Активація режиму розсилки для адміністратора
 @dp.message(Command("broadcast"))
@@ -158,3 +175,12 @@ async def process_direct_message(message: types.Message, state: FSMContext):
             f"Можливо, користувач заблокував бота або ID вказано невірно.\n\n"
             f"Деталі помилки: {str(e)}"
         )
+
+# Видалення повідомлень звичайних користувачів
+@dp.message()
+async def catch_all_messages(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        try:
+            await message.delete()
+        except Exception:
+            pass
