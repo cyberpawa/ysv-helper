@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import google.generativeai as genai
+
 from api.database.session import get_supabase
 from api.services.excel_service import generate_excel_bytes
 from api.services.email_service import send_tabel_email_bytes
@@ -26,7 +27,7 @@ if GEMINI_KEY:
 
 generation_config = {"temperature": 0.0}
 model = genai.GenerativeModel(
-    model_name="gemini-3.5-flash",  # Update to standard model name
+    model_name="gemini-2.5-flash",
     generation_config=generation_config,
     system_instruction="""
 <ROLE>
