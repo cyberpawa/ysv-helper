@@ -26,10 +26,8 @@ if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY, transport="rest")
 
 generation_config = {"temperature": 0.0}
-model = genai.GenerativeModel(
-    model_name="gemini-3.5-flash",
-    generation_config=generation_config,
-    system_instruction="""
+
+SYSTEM_PROMPT = """
 <ROLE>
 You are a flawless Optical Character Recognition (OCR) API. Your sole purpose is to digitize handwritten Ukrainian Form P-5 timesheets into a strict JSON format. You are a transcription engine, not a calculator.
 </ROLE>
@@ -129,6 +127,10 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
 }
 </OUTPUT_FORMAT>
 """
+model = genai.GenerativeModel(
+    model_name="gemini-3.5-flash",
+    generation_config=generation_config,
+    system_instruction=SYSTEM_PROMPT
 )
 
 # Адаптація JSON-відповіді від ШІ до попередньої структури даних
@@ -346,7 +348,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         current_model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
-            system_instruction=model.system_instruction # Берем инструкцию из глобальной переменной
+            system_instruction=SYSTEM_PROMPT
         )
         # ==========================================
         # ТИМЧАСОВИЙ ТЕСТ: Симуляція помилки 503
