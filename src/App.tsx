@@ -721,11 +721,12 @@ export default function App() {
   // -------------------------------------------------------------
   // ВИКЛИК ШІ (GEMINI) ДЛЯ РОЗПІЗНАВАННЯ ТЕКСТУ
   // -------------------------------------------------------------
-  const analyzeTimesheetImage = async () => {
+const analyzeTimesheetImage = async (useFallback: boolean = false) => {
     triggerHaptic();
     if (!currentBase64Image) return;
   
-    setGlobalLoadingText("ШІ аналізує табель...");
+    // Меняем текст загрузки, чтобы пользователь понимал, какая модель работает
+    setGlobalLoadingText(useFallback ? "ШІ (модель v2.5) аналізує табель..." : "ШІ аналізує табель...");
     setGlobalLoading(true);
   
     try {
@@ -733,11 +734,30 @@ export default function App() {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ 
-          image: currentBase64Image 
+          image: currentBase64Image,
+          use_fallback: useFallback // Передаем флаг на бэкенд
         })
       });
       
       const result = await res.json();
+      
+      // Перехватываем высокую нагрузку
+      if (result.status === "high_demand") {
+        setGlobalLoading(false);
+        // Спрашиваем пользователя стандартным системным диалогом
+        const userAgrees = confirm(
+          "Модель Gemini 3.5 зараз перевантажена (високий попит на серверах Google).\n\n" +
+          "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 2.5)?"
+        );
+        
+        if (userAgrees) {
+          // Если согласен - просто вызываем эту же функцию снова, но с флагом true.
+          // Фотография никуда не делась, она лежит в currentBase64Image.
+          analyzeTimesheetImage(true);
+        }
+        return; // Завершаем выполнение текущей попытки
+      }
+
       setGlobalLoading(false);
   
       if (result.status === "success") {
@@ -1643,7 +1663,7 @@ export default function App() {
 
                 <div className="ios-frosted-glass rounded-2xl p-4 flex flex-col items-center border border-white/60">
                   <button 
-                    onClick={analyzeTimesheetImage}
+                    onClick={() => analyzeTimesheetImage(false)}
                     disabled={globalLoading}
                     className="ios-touchable w-full bg-[#007AFF] text-white font-bold py-4 rounded-xl text-center shadow-lg shadow-blue-500/25 disabled:opacity-50"
                   >

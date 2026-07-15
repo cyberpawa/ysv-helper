@@ -308,12 +308,14 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     chat_id = current_user.get("id")
     data = await request.json()
     image_b64 = data.get("image")
+    use_fallback = data.get("use_fallback", False) # Читаем флаг резервной модели
+    
     if not image_b64:
         return {"status": "error", "message": "Зображення не знайдено"}
         
     supabase = get_supabase()
     
-    # Оновлюємо статус в базі
+    # 1. Update State to 'processing'
     try:
         supabase.table("user_state").upsert({
             "chat_id": chat_id,
@@ -324,10 +326,10 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     except Exception as state_err:
         print(f"Error saving state: {state_err}")
 
-    # Сповіщаємо користувача про початок процесу
     if bot:
         try:
-            await bot.send_message(chat_id, "⏳ Розпочато аналіз табеля за допомогою ШІ. Зачекайте, будь ласка...")
+            model_msg = "v2.5" if use_fallback else "v3.5"
+            await bot.send_message(chat_id, f"⏳ Розпочато аналіз табеля (модель {model_msg}). Зачекайте, будь ласка...")
         except Exception as bot_err:
             print(f"Bot notification failed: {bot_err}")
 
@@ -339,9 +341,29 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         
         prompt = "Проаналізуй цю таблицю."
         
-        # Виклик моделі для розпізнавання тексту
+        # Динамически выбираем модель в зависимости от флага
+        model_name = "gemini-2.5-flash" if use_fallback else "gemini-3.5-flash"
+        current_model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=generation_config,
+            system_instruction=model.system_instruction # Берем инструкцию из глобальной переменной
+        )
+        # ==========================================
+        # ТИМЧАСОВИЙ ТЕСТ: Симуляція помилки 503
+        # ==========================================
+        if not use_fallback:
+            raise Exception("503 Simulated high demand error for testing")
+        # ==========================================
+
+        # Call Gemini AI
         response = await asyncio.to_thread(
-            model.generate_content, 
+            current_model.generate_content, 
+            [prompt, image_part],
+            request_options={"retry": None, "timeout": 250.0}
+        )
+        # Call Gemini AI
+        response = await asyncio.to_thread(
+            current_model.generate_content, 
             [prompt, image_part],
             request_options={"retry": None, "timeout": 250.0}
         )
@@ -358,7 +380,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         parsed_data = json.loads(match.group(0))
         legacy_data = transform_ai_json_to_legacy(parsed_data)
         
-        # Збереження успішного результату
+        # 3. Success State
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -369,7 +391,6 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         except Exception as save_err:
             print(f"Failed to save final state: {save_err}")
 
-        # Сповіщення про успіх
         if bot:
             try:
                 await bot.send_message(chat_id, "✅ Аналіз табеля завершено! Дані готові для перевірки у додатку.")
@@ -380,10 +401,23 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
 
     except Exception as e:
         error_msg = str(e)
+        
+        # ПЕРЕХВАТ ОШИБКИ 503 (Высокая нагрузка)
+        if "503" in error_msg or "high demand" in error_msg.lower():
+            # Возвращаем статус в idle, чтобы приложение не зависло в вечной обработке
+            try:
+                supabase.table("user_state").upsert({
+                    "chat_id": chat_id, "status": "idle", "raw_json": None, "error_message": None
+                }).execute()
+            except: pass
+            
+            # Возвращаем специальный статус фронтенду
+            return {"status": "high_demand", "message": error_msg}
+
+        # Стандартная обработка других ошибок
         if "429" in error_msg or "Quota exceeded" in error_msg:
             error_msg = "Перевищено ліміт запитів ШІ. Спробуйте через 30 секунд."
             
-        # Збереження інформації про помилку
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -394,7 +428,6 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         except Exception as save_err:
             print(f"Failed to save error state: {save_err}")
 
-        # Інформування користувача про збій
         if bot:
             try:
                 await bot.send_message(chat_id, f"❌ Виникла помилка під час аналізу табеля: {error_msg}")
