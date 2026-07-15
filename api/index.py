@@ -27,6 +27,7 @@ if GEMINI_KEY:
 
 generation_config = {"temperature": 0.0}
 
+# Системні інструкції для ШІ-моделі винесені в окрему константу
 SYSTEM_PROMPT = """
 <ROLE>
 You are a flawless Optical Character Recognition (OCR) API. Your sole purpose is to digitize handwritten Ukrainian Form P-5 timesheets into a strict JSON format. You are a transcription engine, not a calculator.
@@ -310,14 +311,14 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     chat_id = current_user.get("id")
     data = await request.json()
     image_b64 = data.get("image")
-    use_fallback = data.get("use_fallback", False) # Читаем флаг резервной модели
+    use_fallback = data.get("use_fallback", False) 
     
     if not image_b64:
         return {"status": "error", "message": "Зображення не знайдено"}
         
     supabase = get_supabase()
     
-    # 1. Update State to 'processing'
+    # Оновлюємо статус в базі
     try:
         supabase.table("user_state").upsert({
             "chat_id": chat_id,
@@ -328,6 +329,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     except Exception as state_err:
         print(f"Error saving state: {state_err}")
 
+    # Сповіщаємо користувача про початок процесу з вказанням версії моделі
     if bot:
         try:
             model_msg = "v3.1 Lite" if use_fallback else "v3.5"
@@ -343,27 +345,15 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         
         prompt = "Проаналізуй цю таблицю."
         
-        # Динамически выбираем модель в зависимости от флага
+        # Динамічний вибір моделі на основі прапорця резервного варіанту
         model_name = "gemini-3.1-flash-lite" if use_fallback else "gemini-3.5-flash"
         current_model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
             system_instruction=SYSTEM_PROMPT
         )
-        # ==========================================
-        # ТИМЧАСОВИЙ ТЕСТ: Симуляція помилки 503
-        # ==========================================
-        if not use_fallback:
-            raise Exception("503 Simulated high demand error for testing")
-        # ==========================================
-
-        # Call Gemini AI
-        response = await asyncio.to_thread(
-            current_model.generate_content, 
-            [prompt, image_part],
-            request_options={"retry": None, "timeout": 250.0}
-        )
-        # Call Gemini AI
+        
+        # Виклик моделі для розпізнавання тексту
         response = await asyncio.to_thread(
             current_model.generate_content, 
             [prompt, image_part],
@@ -382,7 +372,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         parsed_data = json.loads(match.group(0))
         legacy_data = transform_ai_json_to_legacy(parsed_data)
         
-        # 3. Success State
+        # Збереження успішного результату
         try:
             supabase.table("user_state").upsert({
                 "chat_id": chat_id,
@@ -393,6 +383,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         except Exception as save_err:
             print(f"Failed to save final state: {save_err}")
 
+        # Сповіщення про успіх
         if bot:
             try:
                 await bot.send_message(chat_id, "✅ Аналіз табеля завершено! Дані готові для перевірки у додатку.")
@@ -404,19 +395,19 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     except Exception as e:
         error_msg = str(e)
         
-        # ПЕРЕХВАТ ОШИБКИ 503 (Высокая нагрузка)
+        # Обробка помилки 503 (перевантаження серверів)
         if "503" in error_msg or "high demand" in error_msg.lower():
-            # Возвращаем статус в idle, чтобы приложение не зависло в вечной обработке
+            # Повернення стану в очікування для уникнення зависання
             try:
                 supabase.table("user_state").upsert({
                     "chat_id": chat_id, "status": "idle", "raw_json": None, "error_message": None
                 }).execute()
             except: pass
             
-            # Возвращаем специальный статус фронтенду
+            # Спеціальний статус для клієнта
             return {"status": "high_demand", "message": error_msg}
 
-        # Стандартная обработка других ошибок
+        # Стандартна обробка інших помилок
         if "429" in error_msg or "Quota exceeded" in error_msg:
             error_msg = "Перевищено ліміт запитів ШІ. Спробуйте через 30 секунд."
             

@@ -725,8 +725,8 @@ const analyzeTimesheetImage = async (useFallback: boolean = false) => {
     triggerHaptic();
     if (!currentBase64Image) return;
   
-    // Меняем текст загрузки, чтобы пользователь понимал, какая модель работает
-    setGlobalLoadingText(useFallback ? "ШІ (модель v3.0) аналізує табель..." : "ШІ аналізує табель...");
+    // Зміна тексту завантаження залежно від активної моделі
+    setGlobalLoadingText(useFallback ? "ШІ (модель v3.1 Lite) аналізує табель..." : "ШІ аналізує табель...");
     setGlobalLoading(true);
   
     try {
@@ -741,21 +741,19 @@ const analyzeTimesheetImage = async (useFallback: boolean = false) => {
       
       const result = await res.json();
       
-      // Перехватываем высокую нагрузку
+      // Обробка ситуації з високим навантаженням на сервери Google
       if (result.status === "high_demand") {
         setGlobalLoading(false);
-        // Спрашиваем пользователя стандартным системным диалогом
         const userAgrees = confirm(
           "Модель Gemini 3.5 зараз перевантажена (високий попит на серверах Google).\n\n" +
           "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.1)?"
         );
         
         if (userAgrees) {
-          // Если согласен - просто вызываем эту же функцию снова, но с флагом true.
-          // Фотография никуда не делась, она лежит в currentBase64Image.
+          // Повторний виклик функції з увімкненим прапорцем резервної моделі
           analyzeTimesheetImage(true);
         }
-        return; // Завершаем выполнение текущей попытки
+        return;
       }
 
       setGlobalLoading(false);

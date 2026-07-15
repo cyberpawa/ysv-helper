@@ -21,6 +21,7 @@ class BroadcastState(StatesGroup):
 # Стартове повідомлення бота
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
+    # Перевірка прав доступу: адміністратор отримує консоль, звичайний користувач – Mini App
     if message.from_user.id == ADMIN_ID:
         await message.answer(
             "👨‍💻 Вітаю, адміне! Тобі доступний ввід тексту та команди (/broadcast, /msg).",
@@ -29,6 +30,7 @@ async def cmd_start(message: types.Message):
     else:
         app_url = os.getenv("APP_URL", "https://ysv-helper.vercel.app").rstrip("/")
         
+        # Формування кнопки для запуску Web App
         markup = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="📱 Відкрити Mini App", web_app=WebAppInfo(url=app_url))]
