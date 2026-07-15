@@ -330,7 +330,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
 
     if bot:
         try:
-            model_msg = "v3.0" if use_fallback else "v3.5"
+            model_msg = "v3.1 Lite" if use_fallback else "v3.5"
             await bot.send_message(chat_id, f"⏳ Розпочато аналіз табеля (модель {model_msg}). Зачекайте, будь ласка...")
         except Exception as bot_err:
             print(f"Bot notification failed: {bot_err}")
@@ -344,7 +344,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         prompt = "Проаналізуй цю таблицю."
         
         # Динамически выбираем модель в зависимости от флага
-        model_name = "gemini-3.0-flash" if use_fallback else "gemini-3.5-flash"
+        model_name = "gemini-3.1-flash-lite" if use_fallback else "gemini-3.5-flash"
         current_model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
