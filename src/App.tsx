@@ -726,7 +726,7 @@ const analyzeTimesheetImage = async (useFallback: boolean = false) => {
     if (!currentBase64Image) return;
   
     // Меняем текст загрузки, чтобы пользователь понимал, какая модель работает
-    setGlobalLoadingText(useFallback ? "ШІ (модель v2.5) аналізує табель..." : "ШІ аналізує табель...");
+    setGlobalLoadingText(useFallback ? "ШІ (модель v3.0) аналізує табель..." : "ШІ аналізує табель...");
     setGlobalLoading(true);
   
     try {
@@ -747,7 +747,7 @@ const analyzeTimesheetImage = async (useFallback: boolean = false) => {
         // Спрашиваем пользователя стандартным системным диалогом
         const userAgrees = confirm(
           "Модель Gemini 3.5 зараз перевантажена (високий попит на серверах Google).\n\n" +
-          "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 2.5)?"
+          "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.0)?"
         );
         
         if (userAgrees) {
