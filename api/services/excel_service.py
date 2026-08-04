@@ -5,14 +5,20 @@ from openpyxl.styles import PatternFill
 from api.database.session import get_supabase
 
 # Функція генерації табеля у пам'яті без збереження на диск
-def generate_excel_bytes(parsed_data: dict) -> bytes:
+def generate_excel_bytes(parsed_data: dict, is_test_user: bool = False) -> bytes:
     meta = parsed_data.get("document_meta", {})
     
     # Отримання базового шаблону Excel з хмарного сховища Supabase
     try:
         supabase_client = get_supabase()
         bucket_name = os.getenv("SUPABASE_BUCKET", "templates")
-        template_name = os.getenv("SUPABASE_TEMPLATE_FILE", "timesheet_template.xlsx")
+
+        # Динамічний вибір шаблону
+        if is_test_user:
+            template_name = "fake_template.xlsx"
+        else:
+            template_name = os.getenv("SUPABASE_TEMPLATE_FILE", "timesheet_template.xlsx")
+
         print(f"📥 Downloading Excel template from Supabase Storage: {bucket_name}/{template_name}...")
         response = supabase_client.storage.from_(bucket_name).download(template_name)
         template_file = io.BytesIO(response)

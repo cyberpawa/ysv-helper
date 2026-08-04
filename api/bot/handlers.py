@@ -45,6 +45,21 @@ async def cmd_start(message: types.Message):
             reply_markup=markup
         )
 
+        # Перевіряємо, чи користувач новий (немає записів в архіві)
+        supabase = get_supabase()
+        res = supabase.table("tabel_archive").select("id").eq("chat_id", message.from_user.id).limit(1).execute()
+        
+        if not res.data:
+            test_photo_id = os.getenv("TEST_PHOTO_FILE_ID")
+            if test_photo_id:
+                try:
+                    await message.answer_photo(
+                        photo=test_photo_id,
+                        caption="👋 Бачу, ви тут вперше! Ось тестове фото заповненого табеля. Збережіть його та завантажте у додаток, щоб перевірити, як працює розпізнавання."
+                    )
+                except Exception as e:
+                    print(f"Failed to send test photo: {e}")
+
 # Активація режиму розсилки для адміністратора
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: types.Message, state: FSMContext):
@@ -186,3 +201,8 @@ async def catch_all_messages(message: types.Message):
             await message.delete()
         except Exception:
             pass
+    else:
+        # Якщо адмін надсилає фото, бот повертає його file_id для налаштувань
+        if message.photo:
+            file_id = message.photo[-1].file_id # Беремо фото в найкращій якості
+            await message.answer(f"Ось `file_id` цієї фотографії для .env файлу:\n\n`{file_id}`", parse_mode="Markdown")

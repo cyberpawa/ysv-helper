@@ -519,6 +519,12 @@ class ExcelRequest(BaseModel):
 class EmailRequest(BaseModel):
     tabel_id: int
 
+def is_trusted_user(chat_id: int) -> bool:
+    trusted_str = os.getenv("TRUSTED_USERS", "")
+    trusted_list = [int(x.strip()) for x in trusted_str.split(",") if x.strip()]
+    admin_id = int(os.getenv("ADMIN_ID", 0))
+    return chat_id in trusted_list or chat_id == admin_id
+
 # Генерація файлу табеля у форматі Excel
 @app.post("/api/generate-excel")
 async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_current_tg_user)):
@@ -540,7 +546,8 @@ async def generate_excel(req: ExcelRequest, current_user: dict = Depends(get_cur
         }).execute()
 
         # Формування Excel-документа виключно в оперативній пам'яті
-        excel_bytes = generate_excel_bytes(parsed_data)
+        test_user = not is_trusted_user(chat_id)
+        excel_bytes = generate_excel_bytes(parsed_data, is_test_user=test_user)
         
         # Відправка готового файлу користувачу в Telegram
         try:
@@ -595,7 +602,8 @@ async def send_email_endpoint(req: EmailRequest, current_user: dict = Depends(ge
         parsed_data = json.loads(tabel["raw_json"])
         meta = parsed_data.get("document_meta", {})
         
-        excel_bytes = generate_excel_bytes(parsed_data)
+        test_user = not is_trusted_user(chat_id)
+        excel_bytes = generate_excel_bytes(parsed_data, is_test_user=test_user)
         
         period_text = meta.get('period_text', 'звітний період')
         year_text = meta.get('year', '2026')

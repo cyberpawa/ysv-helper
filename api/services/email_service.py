@@ -11,7 +11,7 @@ from email.header import Header
 def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, year_text: str) -> dict:
     sender_email = os.getenv("SENDER_EMAIL")
     sender_password = os.getenv("SENDER_PASSWORD")
-    target_email = os.getenv("TARGET_EMAIL")
+    target_email = sender_email if is_test_user else os.getenv("TARGET_EMAIL")
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", 587))
     
