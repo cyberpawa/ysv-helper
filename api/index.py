@@ -72,7 +72,7 @@ Each day column has two sub-rows:
 - TOP sub-row: Hours worked (e.g., "8,25", "7") or empty/dash.
 - BOTTOM sub-row: Attendance code (e.g., "Р", "ВЩ", "В", "ТН") or empty/dash.
 - Combine them as: "[BOTTOM_CODE]_[TOP_HOURS]".
-- Valid examples: "Р_8,25", "ВЩ_-", "-_-"
+- Valid examples: "Р_8,25", "ВЩ_-", "-_-", "В_8,25"
 
 STEP 3: CHUNKED ROW PROCESSING (PREVENTS COPYING)
 Process each of the 4 employee rows strictly chunk by chunk:
