@@ -8,7 +8,7 @@ from email import encoders
 from email.header import Header
 
 # Основна функція для надсилання згенерованого Excel-файлу електронною поштою
-def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, year_text: str) -> dict:
+def send_tabel_email_bytes(tabel_id: int, excel_bytes: bytes, period_text: str, year_text: str, is_test_user: bool = False) -> dict:
     sender_email = os.getenv("SENDER_EMAIL")
     sender_password = os.getenv("SENDER_PASSWORD")
     target_email = sender_email if is_test_user else os.getenv("TARGET_EMAIL")
