@@ -612,7 +612,8 @@ async def send_email_endpoint(req: EmailRequest, current_user: dict = Depends(ge
             tabel_id=req.tabel_id,
             excel_bytes=excel_bytes,
             period_text=period_text,
-            year_text=year_text
+            year_text=year_text,
+            is_test_user=test_user
         )
         return email_res
         
