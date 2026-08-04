@@ -349,7 +349,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         prompt = "Проаналізуй цю таблицю."
         
         # Динамічний вибір моделі на основі прапорця резервного варіанту
-        model_name = "gemini-3.5-flash-lite" if use_fallback else "gemini-3.5-flash"
+        model_name = "gemini-3.5-flash-lite" if use_fallback else "gemini-3.6-flash"
         current_model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
