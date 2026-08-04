@@ -28,21 +28,11 @@ async def cmd_start(message: types.Message):
             reply_markup=ReplyKeyboardRemove()
         )
     else:
-        app_url = os.getenv("APP_URL", "https://ysv-helper.vercel.app").rstrip("/")
-        
-        # Формування кнопки для запуску Web App
-        markup = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="📱 Відкрити Mini App", web_app=WebAppInfo(url=app_url))]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
         
         await message.answer(
             "Вітаю! Я ваш асистент для оцифрування табелів робочого часу.\n\n"
-            "Натисніть велику кнопку нижче, щоб відкрити програму.",
-            reply_markup=markup
+            "Натисніть кнопку зліва від поля вводу повідомлення, щоб відкрити програму.",
+            reply_markup=ReplyKeyboardRemove()
         )
 
         # Перевіряємо, чи користувач новий (немає записів в архіві)
