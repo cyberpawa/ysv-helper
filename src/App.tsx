@@ -745,8 +745,8 @@ const analyzeTimesheetImage = async (useFallback: boolean = false) => {
       if (result.status === "high_demand") {
         setGlobalLoading(false);
         const userAgrees = confirm(
-          "Модель Gemini 3.5 зараз перевантажена (високий попит на серверах Google).\n\n" +
-          "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.1)?"
+          "Модель Gemini 4 зараз перевантажена (високий попит на серверах Google).\n\n" +
+          "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.8)?"
         );
         
         if (userAgrees) {
