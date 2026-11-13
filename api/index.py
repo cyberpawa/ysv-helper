@@ -132,7 +132,7 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
 </OUTPUT_FORMAT>
 """
 model = genai.GenerativeModel(
-    model_name="gemini-3.5-flash",
+    model_name="gemini-4-hydrogen",
     generation_config=generation_config,
     system_instruction=SYSTEM_PROMPT
 )
@@ -335,7 +335,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     # Сповіщаємо користувача про початок процесу з вказанням версії моделі
     if bot:
         try:
-            model_msg = "v3.1 Flash Lite" if use_fallback else "v3.5 Flash"
+            model_msg = "v4 Hydrogen" if use_fallback else "v3.8 Flash"
             await bot.send_message(chat_id, f"⏳ Розпочато аналіз табеля (модель {model_msg}). Зачекайте, будь ласка...")
         except Exception as bot_err:
             print(f"Bot notification failed: {bot_err}")
@@ -349,7 +349,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
         prompt = "Проаналізуй цю таблицю."
         
         # Динамічний вибір моделі на основі прапорця резервного варіанту
-        model_name = "gemini-3.1-flash-lite" if use_fallback else "gemini-3.5-flash"
+        model_name = "gemini-3.8-flash" if use_fallback else "gemini-4-hydrogen"
         current_model = genai.GenerativeModel(
             model_name=model_name,
             generation_config=generation_config,
