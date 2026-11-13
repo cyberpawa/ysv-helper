@@ -335,7 +335,7 @@ async def receive_image(request: Request, current_user: dict = Depends(get_curre
     # Сповіщаємо користувача про початок процесу з вказанням версії моделі
     if bot:
         try:
-            model_msg = "v4 Hydrogen" if use_fallback else "v3.8 Flash"
+            model_msg = "v3.8 Flash" if use_fallback else "v4 Hydrogen"
             await bot.send_message(chat_id, f"⏳ Розпочато аналіз табеля (модель {model_msg}). Зачекайте, будь ласка...")
         except Exception as bot_err:
             print(f"Bot notification failed: {bot_err}")
