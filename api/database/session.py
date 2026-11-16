@@ -1,19 +1,17 @@
 import os
-from supabase import create_client, Client
+from supabase import Client, create_client
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
+_supabase_client: Client | None = None
 
-# Глобальна змінна для лінивої ініціалізації клієнта
-supabase: Client = None
 
-# Функція створення або отримання існуючого клієнта БД
 def get_supabase() -> Client:
-    global supabase
-    if not supabase:
+    global _supabase_client
+    if _supabase_client is None:
         url = os.getenv("SUPABASE_URL")
         key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY")
         if not url or not key:
-            raise ValueError("SUPABASE_URL and SUPABASE_KEY (or SUPABASE_SERVICE_KEY) environment variables are required")
-        supabase = create_client(url, key)
-    return supabase
+            raise ValueError(
+                "SUPABASE_URL and SUPABASE_KEY (or SUPABASE_SERVICE_KEY) environment variables are required"
+            )
+        _supabase_client = create_client(url, key)
+    return _supabase_client

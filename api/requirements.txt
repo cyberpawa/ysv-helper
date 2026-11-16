@@ -5,4 +5,3 @@ supabase
 openpyxl
 google-generativeai
 aiogram
-jinja2
