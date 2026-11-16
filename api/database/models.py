@@ -1,18 +1,19 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+
 
 class TabelArchive(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     chat_id: int
     period_text: str
     year: str
     date_filled: str
     raw_json: str
-    created_at: Optional[str] = None
+    created_at: str | None = None
+
 
 class UserState(BaseModel):
     chat_id: int
-    status: str  # Варіанти статусу: 'idle', 'processing', 'ready', 'error'
-    raw_json: Optional[str] = None
-    error_message: Optional[str] = None
-    updated_at: Optional[str] = None
+    status: str  # Варіанти статусу: 'idle', 'processing', 'ready', 'high_demand', 'error'
+    raw_json: str | None = None
+    error_message: str | None = None
+    updated_at: str | None = None

@@ -5,6 +5,7 @@ import os
 import openpyxl
 from openpyxl.styles import PatternFill
 
+from api.config import settings
 from api.database.session import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -46,11 +47,8 @@ def generate_excel_bytes(parsed_data: dict, is_test_user: bool = False) -> bytes
 
     try:
         supabase_client = get_supabase()
-        bucket_name = os.getenv("SUPABASE_BUCKET", "templates")
-        if is_test_user:
-            template_name = "fake_template.xlsx"
-        else:
-            template_name = os.getenv("SUPABASE_TEMPLATE_FILE", "timesheet_template.xlsx")
+        bucket_name = settings.supabase_bucket
+        template_name = "fake_template.xlsx" if is_test_user else settings.supabase_template_file
 
         logger.info("Downloading Excel template from %s/%s", bucket_name, template_name)
         response = supabase_client.storage.from_(bucket_name).download(template_name)

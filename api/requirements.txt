@@ -1,7 +1,11 @@
 fastapi
 pydantic
+pydantic-settings
 uvicorn
 supabase
 openpyxl
 google-generativeai
 aiogram
+httpx
+pytest
+ruff

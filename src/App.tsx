@@ -78,6 +78,14 @@ export default function App() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
   const sheetCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentBase64Ref = useRef<string | null>(null);
+  const selectedTemplateRef = useRef<TimesheetTemplateId>("auto");
+
+  useEffect(() => {
+    currentBase64Ref.current = currentBase64Image;
+    selectedTemplateRef.current = selectedTemplateMode;
+  }, [currentBase64Image, selectedTemplateMode]);
 
   const BACKEND_URL =
     window.location.hostname === "localhost" ||
@@ -95,66 +103,136 @@ export default function App() {
     return headers;
   };
 
-  // Відновлення стану обробки при перезавантаженні
-  useEffect(() => {
-    let pollingInterval: ReturnType<typeof setInterval> | null = null;
+  const stopStatePolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
 
-    const checkState = async () => {
+  const submitTimesheetUpload = useCallback(
+    async (
+      useFallback: boolean,
+      onAccepted: () => void
+    ) => {
+      const imagePayload = currentBase64Ref.current;
+      if (!imagePayload) return;
+
+      setGlobalLoadingText(
+        useFallback
+          ? "ШІ (Gemini 3.8 Flash) аналізує табель..."
+          : "ШІ (Gemini 4 Hydrogen) аналізує табель..."
+      );
+      setGlobalLoading(true);
+
       try {
-        const res = await fetch(`${BACKEND_URL}/state`, {
-          method: "GET",
+        const res = await fetch(`${BACKEND_URL}/upload`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            image: imagePayload,
+            use_fallback: useFallback,
+            template_id: selectedTemplateRef.current,
+          }),
+        });
+
+        const result = await res.json();
+
+        if (result.status === "processing") {
+          onAccepted();
+          return;
+        }
+
+        setGlobalLoading(false);
+
+        if (result.status === "success" && result.data) {
+          setFinalParsedData(result.data);
+          setSubScreen("table");
+        } else {
+          alert("Помилка розпізнавання: " + (result.message || result.detail || "Невідома помилка"));
+        }
+      } catch (err: any) {
+        setGlobalLoading(false);
+        alert("Помилка мережі: " + err.message);
+      }
+    },
+    []
+  );
+
+  const checkUserState = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/state`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      const result = await res.json();
+      if (result.status !== "success" || !result.state) return;
+
+      const s = result.state;
+      if (s.status === "processing") {
+        setGlobalLoadingText((prev) => prev || "ШІ аналізує табель...");
+        setGlobalLoading(true);
+        setScreen("review");
+        setSubScreen((prev) => (prev === "table" ? "table" : "preview"));
+        if (!pollingIntervalRef.current) {
+          pollingIntervalRef.current = setInterval(checkUserState, 2500);
+        }
+      } else if (s.status === "ready" && s.raw_json) {
+        stopStatePolling();
+        const data = JSON.parse(s.raw_json);
+        setFinalParsedData(data);
+        setGlobalLoading(false);
+        setScreen("review");
+        setSubScreen("table");
+        setIsReadOnly(false);
+        setConfirmButtonVisible(true);
+        setTitleText("Перевірте дані (Редагування)");
+        setCurrentArchiveId(null);
+      } else if (s.status === "high_demand") {
+        stopStatePolling();
+        setGlobalLoading(false);
+        await fetch(`${BACKEND_URL}/state/reset`, {
+          method: "POST",
           headers: getAuthHeaders(),
         });
-        const result = await res.json();
-        if (result.status === "success" && result.state) {
-          const s = result.state;
-          if (s.status === "processing") {
-            setGlobalLoadingText("ШІ аналізує табель...");
-            setGlobalLoading(true);
-            setScreen("review");
-            setSubScreen("preview");
-
-            if (!pollingInterval) {
-              pollingInterval = setInterval(checkState, 3000);
+        const userAgrees = confirm(
+          "Модель Gemini 4 Hydrogen зараз перевантажена (високий попит на серверах Google).\n\n" +
+            "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.8 Flash)?"
+        );
+        if (userAgrees) {
+          submitTimesheetUpload(true, () => {
+            if (!pollingIntervalRef.current) {
+              pollingIntervalRef.current = setInterval(checkUserState, 2500);
             }
-          } else if (s.status === "ready" && s.raw_json) {
-            if (pollingInterval) {
-              clearInterval(pollingInterval);
-              pollingInterval = null;
-            }
-            const data = JSON.parse(s.raw_json);
-            setFinalParsedData(data);
-            setGlobalLoading(false);
-            setScreen("review");
-            setSubScreen("table");
-            setIsReadOnly(false);
-            setConfirmButtonVisible(true);
-            setTitleText("Перевірте дані (Редагування)");
-            setCurrentArchiveId(null);
-          } else if (s.status === "error") {
-            if (pollingInterval) {
-              clearInterval(pollingInterval);
-              pollingInterval = null;
-            }
-            setGlobalLoading(false);
-            alert("❌ Помилка обробки: " + s.error_message);
-            await fetch(`${BACKEND_URL}/state/reset`, {
-              method: "POST",
-              headers: getAuthHeaders(),
-            });
-          }
+          });
         }
-      } catch (err) {
-        console.error("Failed to recover user state:", err);
+      } else if (s.status === "error") {
+        stopStatePolling();
+        setGlobalLoading(false);
+        alert("❌ Помилка обробки: " + (s.error_message || "Не вдалося розпізнати зображення"));
+        await fetch(`${BACKEND_URL}/state/reset`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+        });
       }
-    };
+    } catch (err) {
+      console.error("Failed to recover user state:", err);
+    }
+  }, [stopStatePolling, submitTimesheetUpload]);
 
-    checkState();
+  const startStatePolling = useCallback(() => {
+    if (!pollingIntervalRef.current) {
+      pollingIntervalRef.current = setInterval(checkUserState, 2500);
+    }
+  }, [checkUserState]);
 
+  // Відновлення стану обробки при перезавантаженні
+  useEffect(() => {
+    checkUserState();
     return () => {
-      if (pollingInterval) clearInterval(pollingInterval);
+      stopStatePolling();
     };
-  }, []);
+  }, [checkUserState, stopStatePolling]);
 
   useEffect(() => {
     if (tg) {
@@ -608,53 +686,7 @@ export default function App() {
 
   const analyzeTimesheetImage = async (useFallback: boolean = false) => {
     triggerHaptic();
-    if (!currentBase64Image) return;
-
-    setGlobalLoadingText(
-      useFallback
-        ? "ШІ (Gemini 3.8 Flash) аналізує табель..."
-        : "ШІ (Gemini 4 Hydrogen) аналізує табель..."
-    );
-    setGlobalLoading(true);
-
-    try {
-      const res = await fetch(`${BACKEND_URL}/upload`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          image: currentBase64Image,
-          use_fallback: useFallback,
-          template_id: selectedTemplateMode,
-        }),
-      });
-
-      const result = await res.json();
-
-      if (result.status === "high_demand") {
-        setGlobalLoading(false);
-        const userAgrees = confirm(
-          "Модель Gemini 4 Hydrogen зараз перевантажена (високий попит на серверах Google).\n\n" +
-            "Бажаєте спробувати розпізнати цей табель за допомогою резервної моделі (Gemini 3.8 Flash)?"
-        );
-
-        if (userAgrees) {
-          analyzeTimesheetImage(true);
-        }
-        return;
-      }
-
-      setGlobalLoading(false);
-
-      if (result.status === "success") {
-        setFinalParsedData(result.data);
-        setSubScreen("table");
-      } else {
-        alert("Помилка розпізнавання: " + result.message);
-      }
-    } catch (err: any) {
-      setGlobalLoading(false);
-      alert("Помилка мережі: " + err.message);
-    }
+    await submitTimesheetUpload(useFallback, startStatePolling);
   };
 
   const handleToggleYellow = (day: string) => {
@@ -852,18 +884,26 @@ export default function App() {
     setEditingCell(null);
   };
 
-  // Робота з архівом бази даних
+  // Робота з архівом бази даних (конвертація UTC у локальний часовий пояс браузера)
   const formatLocalDate = (utcString: string) => {
+    if (!utcString) return "";
     try {
-      const d = new Date(utcString);
+      const normalized =
+        utcString.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(utcString)
+          ? utcString
+          : `${utcString}Z`;
+      const d = new Date(normalized);
+      if (Number.isNaN(d.getTime())) return utcString;
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       return d.toLocaleString("uk-UA", {
+        timeZone,
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
       });
-    } catch (e) {
+    } catch {
       return utcString;
     }
   };
@@ -883,7 +923,13 @@ export default function App() {
       const result = await res.json();
       setArchiveLoading(false);
 
-      if (result.status === "success" && result.archive.length > 0) {
+      if (result.status === "error") {
+        setArchiveList([]);
+        setArchiveMessage(
+          "Помилка при завантаженні архіву: " +
+            (result.message || result.detail || "Невідома помилка")
+        );
+      } else if (result.status === "success" && result.archive?.length > 0) {
         setArchiveList(result.archive);
         setArchiveMessage("");
       } else {

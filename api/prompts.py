@@ -11,16 +11,17 @@ You are a flawless Optical Character Recognition (OCR) API. Your sole purpose is
 3. ANTI-COPYCAT & MID-MONTH CHANGES: Employee schedules frequently change abruptly mid-month (e.g., suddenly switching from "Р" to "В" for vacation). Do NOT let autoregressive patterns blind you. Employee 4 is unique. Pay extreme visual attention to the bottom rows to catch these sudden code changes. Verify the ink for every single day independently.
 4. EXACT CYRILLIC: Output Ukrainian text exactly as written.
 5. DECIMAL FORMAT: Always use a comma for decimals (e.g., "8,25").
-6. BLANK CELLS HANDLING: 
+6. BLANK CELLS HANDLING:
    - For daily chunks (days 01-31): If a cell is empty or has a dash, output "-_-".
    - For Totals and Absences sections: If a cell is empty or has a dash, output an empty string "". NEVER use "-_-" in totals or absences.
 7. CROSSED OUT DAYS (WEEKENDS): Do not rush! Before processing employee rows, you MUST explicitly scan the top header row (containing day numbers 01 to 31). Look carefully for thin handwritten diagonal strokes or 'X' marks crossing out these numbers.
+8. NON-TABLE / UNREADABLE IMAGE VALIDATION: Verify first that the image actually depicts a tabular timesheet grid (Form P-5 or similar attendance table). If the photo is NOT a timesheet table (e.g. random object, portrait, non-tabular text) or is completely unreadable, set "is_timesheet_table": false, briefly explain why in Ukrainian in "rejection_reason", and return "employees": []. Otherwise set "is_timesheet_table": true and "rejection_reason": "".
 </CRITICAL_DIRECTIVES>
 
 <SPECIFIC_CORRECTIONS>
 CRITICAL WARNING FOR ABSENCE CODES (Right side of the table):
 - In the absence reason columns, the TOP cell contains ONLY NUMERIC CODES (e.g., 8, 24).
-- It is visually impossible for a letter to be here. 
+- It is visually impossible for a letter to be here.
 - If you see a shape that resembles the Cyrillic letter "В" (Ve) or "B", it is STRICTLY the number "8".
 - ALWAYS output digits for absence codes. NEVER letters.
 </SPECIFIC_CORRECTIONS>
@@ -61,13 +62,15 @@ STEP 4: TOTALS & ABSENCES (USE EMPTY STRINGS "" FOR BLANKS)
 - Absence Reason Columns (The remaining columns in the absences block):
   * "code" = The value in the TOP cell (STRICTLY NUMERIC).
   * "days" & "hours" = The value in the BOTTOM cell. It is usually written as a fraction "days/hours" (e.g., "5/40"). Extract the number of days and hours respectively. If only one number is present, determine if it's days or hours based on context.
-  * ONLY create an object for a column if it has data. Format: {"col": "XX", "code": "Y", "days": "Z", "hours": "W"}. 
+  * ONLY create an object for a column if it has data. Format: {"col": "XX", "code": "Y", "days": "Z", "hours": "W"}.
 </EXTRACTION_ALGORITHM>
 
 <OUTPUT_FORMAT>
 Return ONLY a valid JSON object matching the exact schema below. Do not include markdown formatting like ```json. Do not include any explanations.
 
 {
+  "is_timesheet_table": true,
+  "rejection_reason": "",
   "visual_scratchpad": "string",
   "document_meta": {
     "period_text": "string",
@@ -78,7 +81,6 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
     "period_type": "string",
     "crossed_out_headers": ["string"]
   },
-
   "employees": [
     {
       "row_id": 1,
@@ -102,12 +104,12 @@ Return ONLY a valid JSON object matching the exact schema below. Do not include 
 """
 
 
-def transform_ai_json_to_legacy(ai_json: dict, template_id: str = "form_p5_standard") -> dict:
+def transform_ai_json_to_response(ai_json: dict, template_id: str = "form_p5") -> dict:
     """Adapt chunked AI OCR response into normalized frontend/Excel schema."""
     document_meta = dict(ai_json.get("document_meta", {}))
     document_meta.setdefault("template_type", template_id)
 
-    legacy_json = {"document_meta": document_meta, "employees": []}
+    response_payload: dict = {"document_meta": document_meta, "employees": []}
     chunk_keys = [
         "chunk_01_05",
         "chunk_06_10",
@@ -118,7 +120,7 @@ def transform_ai_json_to_legacy(ai_json: dict, template_id: str = "form_p5_stand
     ]
 
     for emp in ai_json.get("employees", []):
-        legacy_emp = {
+        normalized_emp = {
             "row_id": emp.get("row_id"),
             "days": {},
             "totals": {
@@ -139,13 +141,13 @@ def transform_ai_json_to_legacy(ai_json: dict, template_id: str = "form_p5_stand
             parts = str(value).split("_")
             code = parts[0] if len(parts) > 0 else "-"
             hours = parts[1] if len(parts) > 1 else "-"
-            legacy_emp["days"][day_str] = {"hours": hours, "code": code}
+            normalized_emp["days"][day_str] = {"hours": hours, "code": code}
 
         for d in range(1, 32):
             day_key = f"{d:02d}" if d < 10 else str(d)
-            if day_key not in legacy_emp["days"]:
-                legacy_emp["days"][day_key] = {"hours": "-", "code": "-"}
+            if day_key not in normalized_emp["days"]:
+                normalized_emp["days"][day_key] = {"hours": "-", "code": "-"}
 
-        legacy_json["employees"].append(legacy_emp)
+        response_payload["employees"].append(normalized_emp)
 
-    return legacy_json
+    return response_payload

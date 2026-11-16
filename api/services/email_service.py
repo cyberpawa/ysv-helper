@@ -1,5 +1,4 @@
 import logging
-import os
 import smtplib
 import socket
 from email import encoders
@@ -7,6 +6,8 @@ from email.header import Header
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+from api.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +20,21 @@ def send_tabel_email_bytes(
     is_test_user: bool = False,
 ) -> dict:
     """Send generated .xlsx attachment to accountant or sandbox sender email."""
-    sender_email = os.getenv("SENDER_EMAIL")
-    sender_password = os.getenv("SENDER_PASSWORD")
-    target_email = sender_email if is_test_user else os.getenv("TARGET_EMAIL")
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    sender_email = settings.sender_email
+    sender_password = settings.sender_password
+    target_email = sender_email if is_test_user else settings.target_email
+    smtp_server = settings.smtp_server
+    smtp_port = settings.smtp_port
 
     if not all([sender_email, sender_password, target_email]):
         return {
             "status": "error",
             "message": "Налаштування пошти (.env) відсутні або неповні.",
         }
+
+    assert sender_email is not None
+    assert sender_password is not None
+    assert target_email is not None
 
     subject = f"Табель обліку робочого часу за {period_text} {year_text}"
     body = (
@@ -63,7 +68,7 @@ def send_tabel_email_bytes(
         try:
             resolved = socket.getaddrinfo(smtp_server, smtp_port, socket.AF_INET)
             if resolved:
-                smtp_server = resolved[0][4][0]
+                smtp_server = str(resolved[0][4][0])
         except Exception as exc:
             logger.warning("IPv4 resolution failed for %s: %s", smtp_server, exc)
 

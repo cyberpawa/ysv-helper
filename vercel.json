@@ -3,15 +3,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/api/main.py"
     },
     {
       "source": "/upload",
-      "destination": "/api/index.py"
+      "destination": "/api/main.py"
     },
     {
       "source": "/generate-excel",
-      "destination": "/api/index.py"
+      "destination": "/api/main.py"
     },
     {
       "source": "/(.*)",
